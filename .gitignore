@@ -366,7 +366,6 @@ FodyWeavers.xsd
 tailwind.output.css
 tailwindclasses.json
 tailwinddesc.json
-tailwindmodifiers.json
 tailwindmodifiersorder.json
 tailwindopacity.json
 tailwindorder.json

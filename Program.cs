@@ -675,9 +675,23 @@ async Task GetCssDescripts(List<string> colors, List<string> spacings, List<Vari
                 {
                     var indexOfRgb = pair.Value.IndexOf("rgb");
                     var length = pair.Value.IndexOf(';', indexOfRgb) - indexOfRgb;
-                    replace = pair.Value.Substring(indexOfRgb, length);
+                    var rgb = pair.Value.Substring(indexOfRgb, length);
 
-                    dict[newKey] = pair.Value.Replace(replace, "{0}");
+                    dict[newKey] = pair.Value.Replace(rgb, "{0}");
+
+                    // Sometimes both the hex and the rgb are included
+                    var hexIndex = pair.Value.IndexOf('#');
+                    if (hexIndex != -1)
+                    {
+                        var hex = pair.Value.Substring(hexIndex, 4);
+
+                        if (hex.Skip(1).Distinct().Count() != 1)
+                        {
+                            hex = pair.Value.Substring(hexIndex, 7);
+                        }
+
+                        dict[newKey] = pair.Value.Replace(hex, "{1}");
+                    }
                 }
                 dict.Remove(pair.Key);
             }
@@ -700,7 +714,7 @@ async Task GetCssDescripts(List<string> colors, List<string> spacings, List<Vari
 
                         dict[newKey] = newValue;
                     }
-                    else if (newValue.Contains('#'))
+                    if (newValue.Contains('#'))
                     {
                         var indexOfHex = newValue.IndexOf("#");
 
@@ -712,7 +726,7 @@ async Task GetCssDescripts(List<string> colors, List<string> spacings, List<Vari
                         {
                             replace = newValue.Substring(indexOfHex, 4);
                         }
-                        newValue = newValue.Replace(replace, "{0}");
+                        newValue = newValue.Replace(replace, "{1}");
 
                         dict[newKey] = newValue;
                     }
