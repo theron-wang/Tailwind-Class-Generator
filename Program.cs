@@ -411,12 +411,47 @@ async Task ExtractCssClassesToOutputFile()
                     v.DirectVariants.Add($"{subvariant.Stem}-{subvariant.Variants[0]}");
                     subvariantsToRemove.Add(subvariant);
                 }
+                else
+                {
+                    // Sort numerically first, then alphabetically
+                    // i.e. prevent 5 from appearing after 40 and before 50
+                    subvariant.Variants = [.. subvariant.Variants.OrderBy(item =>
+                        {
+                            bool isNumeric = double.TryParse(item, out double numericValue);
+                            return isNumeric ? 0 : 1;
+                        })
+                        .ThenBy(item =>
+                        {
+                            if (double.TryParse(item, out double numericValue))
+                                return numericValue;
+                            else
+                                return int.MaxValue;
+                        })
+                        .ThenBy(item => item)];
+                }
             }
             v.Subvariants.RemoveAll(subvariantsToRemove.Contains);
             if (v.Subvariants.Count == 0)
             {
                 v.Subvariants = null;
             }
+        }
+
+        if (v.DirectVariants is not null)
+        {
+            v.DirectVariants = [.. v.DirectVariants.OrderBy(item =>
+                {
+                    bool isNumeric = double.TryParse(item, out double numericValue);
+                    return isNumeric ? 0 : 1;
+                })
+                .ThenBy(item =>
+                {
+                    if (double.TryParse(item, out double numericValue))
+                        return numericValue;
+                    else
+                        return int.MaxValue;
+                })
+                .ThenBy(item => item)];
         }
     }
 
