@@ -1,10 +1,9 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-    safelist: [
-        {
-            pattern: /./, // the "." means "everything"
-        },
-    ],
-    theme: {}
-}
-
+  safelist: [
+    {
+      pattern: /./, // the "." means "everything"
+    },
+  ],
+  theme: {},
+};

@@ -364,11 +364,11 @@ FodyWeavers.xsd
 
 # Generated files
 tailwind.output.css
-tailwindclasses.json
 tailwinddesc.json
 tailwindmodifiersorder.json
 tailwindopacity.json
 tailwindorder.json
 tailwindrgbmapper.json
 tailwindspacing.json
-Test.html
+
+v4/
