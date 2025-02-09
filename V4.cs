@@ -203,7 +203,7 @@ internal class V4
 
                             var classesWithSameSubStem =
                                 classesWithSameStem.Where(cl => Helpers.GetVariantAndSubvariantStem(cl) == stem + '-' + subvariantStem).ToList();
-                            
+
                             variant.Subvariants ??= [];
                             variant.Subvariants.Add(new Subvariant()
                             {
@@ -696,27 +696,127 @@ internal class V4
     {
         var variantsPath = Path.Combine(Helpers.BaseFolder, "v4-variants.txt");
 
-        Dictionary<string, string> variantToDescription = [];
-
-        using var fs = new FileStream(variantsPath, FileMode.Open, FileAccess.Read, FileShare.Read);
-        using var sr = new StreamReader(fs);
-
-        while (sr.EndOfStream == false)
+        using (var fs = new FileStream(variantsPath, FileMode.Open, FileAccess.Read, FileShare.Read))
         {
-            var line = (await sr.ReadLineAsync())?.Trim();
+            using var output = File.Open(Path.Combine(Helpers.V4Folder, "all-variants.txt"), FileMode.Create, FileAccess.Write);
+            using var sr = new StreamReader(fs);
+            using var sw = new StreamWriter(output);
 
-            if (string.IsNullOrEmpty(line) || line.StartsWith('#'))
+            string[] multipliers = ["not-", "has-", "in-", "group-", "peer-"];
+
+            while (sr.EndOfStream == false)
             {
-                continue;
+                var line = (await sr.ReadLineAsync())?.Trim();
+
+                if (string.IsNullOrEmpty(line) || line.StartsWith('#'))
+                {
+                    continue;
+                }
+
+                var parts = line.Replace("...", "div").Split('\t');
+
+                await sw.WriteLineAsync($"{parts[0]}:p-px");
+                if (!multipliers.Any(parts[0].StartsWith))
+                {
+                    foreach (var m in multipliers)
+                    {
+                        await sw.WriteLineAsync($"{m}{parts[0]}:p-px");
+                    }
+                }
             }
-
-            var parts = line.Split('\t');
-
-            variantToDescription[parts[0].Trim()] = parts[1].Trim();
         }
 
-        using var variantsOutput = File.Open(Path.Combine(Helpers.V4Folder, "variants.json"), FileMode.Create, FileAccess.Write);
-        await JsonSerializer.SerializeAsync(variantsOutput, variantToDescription);
+        using (var fs = new FileStream(Path.Combine(Helpers.BaseFolder, "v4.css"), FileMode.Create, FileAccess.Write, FileShare.ReadWrite))
+        {
+            using var sw = new StreamWriter(fs);
+            await sw.WriteLineAsync("@import \"tailwindcss\" source(none);");
+            await sw.WriteLineAsync("@source \"./v4/all-variants.txt\";");
+        }
+
+        var processInfo = new ProcessStartInfo("cmd")
+        {
+            WorkingDirectory = Helpers.BaseFolder,
+            Arguments = "/C npx @tailwindcss/cli -i ./v4.css -o ./v4.output.css"
+        };
+
+        using (var process = Process.Start(processInfo))
+        {
+            await process!.WaitForExitAsync();
+        }
+
+        var outputPath = Path.Combine(Helpers.BaseFolder, "v4.output.css");
+
+        Dictionary<string, string> variantsToDescriptions = [];
+        string? activeKey = null;
+
+        var started = false;
+        var layers = 0;
+
+        using (var fs = new FileStream(outputPath, FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            using var sr = new StreamReader(fs);
+
+            while (sr.EndOfStream == false)
+            {
+                var line = (await sr.ReadLineAsync())?.Trim();
+
+                if (string.IsNullOrEmpty(line))
+                {
+                    continue;
+                }
+
+                if (!started)
+                {
+                    if (line.Contains("@layer utilities"))
+                    {
+                        started = true;
+                    }
+                    continue;
+                }
+
+                if (line == "padding: 1px;")
+                {
+                    variantsToDescriptions[activeKey!] += "{0} ";
+                    continue;
+                }
+
+                if (line.StartsWith('.') && line.EndsWith('{'))
+                {
+                    layers = 1;
+                    activeKey = line.Split(' ')[0].TrimStart('.').Replace("\\", "").Replace(":p-px", "").Replace("div", "");
+                    variantsToDescriptions[activeKey] = "";
+                    continue;
+                }
+
+                if (activeKey is not null)
+                {
+                    variantsToDescriptions[activeKey] += line + " ";
+                    if (line.EndsWith('}'))
+                    {
+                        layers--;
+                        if (layers == 0)
+                        {
+                            variantsToDescriptions[activeKey] = variantsToDescriptions[activeKey].Trim().Replace("div", "");
+                            activeKey = null;
+                        }
+                    }
+                    else if (line.EndsWith('{'))
+                    {
+                        layers++;
+                    }
+                }
+
+                if (line.Contains("@keyframes"))
+                {
+                    break;
+                }
+            }
+        }
+
+        outputPath = Path.Combine(Helpers.V4Folder, "variants.json");
+
+        using var variantsOutput = File.Open(outputPath, FileMode.Create, FileAccess.Write);
+        await JsonSerializer.SerializeAsync(variantsOutput, variantsToDescriptions);
     }
 
     public static async Task GetSortOrder()
@@ -838,26 +938,46 @@ internal class V4
             using var reader = new StreamReader(fs);
 
             string? activeClass = null;
+            int layers = 0;
 
             while (reader.EndOfStream == false)
             {
                 var line = reader.ReadLine()?.Trim();
 
-                if (string.IsNullOrEmpty(line) == false && line.StartsWith('.') && line.EndsWith('{'))
+                if (string.IsNullOrEmpty(line))
                 {
+                    continue;
+                }
+
+                if (activeClass is not null && line.EndsWith('{'))
+                {
+                    layers++;
+                }
+
+                if (line.StartsWith('.') && line.EndsWith('{'))
+                {
+                    layers = 1;
                     activeClass = line.Split(' ')[0].TrimStart('.').Replace("\\", "");
                     if (dict.ContainsKey(activeClass) == false)
                     {
                         dict.Add(activeClass, "");
                     }
                 }
-                else if (line!.StartsWith('}'))
+                else if (line.StartsWith('}'))
                 {
+                    layers--;
                     if (activeClass is not null)
                     {
-                        dict[activeClass] = dict[activeClass].Trim();
+                        if (layers == 0)
+                        {
+                            dict[activeClass] = dict[activeClass].Trim();
+                            activeClass = null;
+                        }
+                        else
+                        {
+                            dict[activeClass] += line + " ";
+                        }
                     }
-                    activeClass = null;
                 }
                 else if (activeClass is not null)
                 {
@@ -872,6 +992,11 @@ internal class V4
 
         foreach (var (name, description) in dict)
         {
+            if (name.StartsWith('-'))
+            {
+                continue;
+            }
+
             string processedDescription = description;
 
             var actualName = generatedToActual[name];

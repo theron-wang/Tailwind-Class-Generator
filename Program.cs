@@ -144,5 +144,9 @@ async Task UseV4()
         {
             File.Delete(Path.Combine(Helpers.V4Folder, "all-classes.txt"));
         }
+        if (File.Exists(Path.Combine(Helpers.V4Folder, "all-variants.txt")))
+        {
+            File.Delete(Path.Combine(Helpers.V4Folder, "all-variants.txt"));
+        }
     }
 }
