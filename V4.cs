@@ -370,6 +370,12 @@ internal class V4
                     v.DirectVariants = null;
                 }
             }
+            
+            if (v.Stem.EndsWith("px"))
+            {
+                v.UseSpacing = true;
+                v.Stem = $"{v.Stem[..^3]}-{{s}}";
+            }
 
             if (v.UseColors != true && v.UseSpacing != true && v.UseFractions != true && v.UsePercent != true)
             {
@@ -790,7 +796,6 @@ internal class V4
 
                 if (activeKey is not null)
                 {
-                    variantsToDescriptions[activeKey] += line + " ";
                     if (line.EndsWith('}'))
                     {
                         layers--;
@@ -798,12 +803,15 @@ internal class V4
                         {
                             variantsToDescriptions[activeKey] = variantsToDescriptions[activeKey].Trim().Replace("div", "");
                             activeKey = null;
+                            continue;
                         }
                     }
                     else if (line.EndsWith('{'))
                     {
                         layers++;
                     }
+
+                    variantsToDescriptions[activeKey] += line + " ";
                 }
 
                 if (line.Contains("@keyframes"))
@@ -1171,6 +1179,21 @@ internal class V4
             if (@class.HasArbitrary == true)
             {
                 generatedToActual[$"{@class.Stem}-(--my-var)"] = $"{@class.Stem}-{{a}}";
+            }
+            
+            if (@class.Stem.EndsWith("{s}"))
+            {
+                var generate = @class.Stem.Replace("{s}", "px");
+
+                generatedToActual[generate] = @class.Stem;
+            }
+            else if (@class.DirectVariants is null && @class.Subvariants is null && @class.HasArbitrary != true)
+            {
+                if (@class.Stem == "peer" || @class.Stem == "group")
+                {
+                    continue;
+                }
+                generatedToActual[@class.Stem] = @class.Stem;
             }
         }
 
