@@ -1132,6 +1132,12 @@ internal class V4
                     else
                     {
                         generatedToActual[$"{@class.Stem}-{generate}"] = $"{@class.Stem}-{v}";
+                        generate = v.Replace("{s}", "(--my-var)").Replace("{c}", "(--my-var)").Replace("{n}", "(--my-var)").Replace("{f}", "(--my-var)").Replace("{%}", "(--my-var)");
+
+                        if (generate != v)
+                        {
+                            generatedToActual[$"{@class.Stem}-{generate}"] = $"{@class.Stem}-{generate.Replace("(--my-var)", "{a}")}";
+                        }
                     }
                 }
             }
