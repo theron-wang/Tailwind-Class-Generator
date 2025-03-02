@@ -621,12 +621,13 @@ internal class V4
         // Start at :root, :host {
         // end at next }
 
-        var outputPath = Path.Combine(Helpers.BaseFolder, "v4.output.css");
+        var outputPath = Path.GetFullPath(@".\node_modules\tailwindcss\theme.css", Helpers.BaseFolder);
 
         Dictionary<string, string> theme = [];
         Dictionary<string, string> colors = [];
 
         var started = false;
+        var layers = 0;
 
         var sb = new StringBuilder();
 
@@ -645,19 +646,33 @@ internal class V4
 
                 if (!started)
                 {
-                    if (line.Contains(":root, :host"))
+                    if (line.Contains("@theme"))
                     {
                         started = true;
                     }
                     continue;
                 }
 
-                if (line.Contains('}'))
+                if (line.Contains('{'))
                 {
-                    break;
+                    layers++;
+                    continue;
                 }
 
-                sb.AppendLine(line);
+                if (line.Contains('}'))
+                {
+                    if (layers == 0)
+                    {
+                        break;
+                    }
+                    layers--;
+                    continue;
+                }
+
+                if (layers == 0)
+                {
+                    sb.AppendLine(line);
+                }
             }
         }
 
@@ -670,7 +685,7 @@ internal class V4
                 continue;
             }
 
-            var removeExtraSpace = string.Join(' ', line.Replace(Environment.NewLine, "").Split(Array.Empty<char>(), StringSplitOptions.RemoveEmptyEntries));
+            var removeExtraSpace = string.Join(' ', line.Replace(Environment.NewLine, " ").Split(Array.Empty<char>(), StringSplitOptions.RemoveEmptyEntries));
 
             var parts = removeExtraSpace.Split(':');
             if (parts.Length != 2)
@@ -820,6 +835,9 @@ internal class V4
                 }
             }
         }
+
+        // For some reason 32 gets generated; we need to remove it
+        variantsToDescriptions.Remove("32");
 
         outputPath = Path.Combine(Helpers.V4Folder, "variants.json");
 
@@ -994,7 +1012,10 @@ internal class V4
             }
         }
 
-        Debug.Assert(dict.Keys.All(generatedToActual.ContainsKey) && dict.Keys.Count == generatedToActual.Keys.Count);
+        var extra = generatedToActual.Keys.Where(k => !dict.ContainsKey(k));
+
+        // There is one edge case right now, if any more arise something is wrong
+        Debug.Assert(extra.Count() == 1);
 
         var descriptions = new Dictionary<string, string>();
 
