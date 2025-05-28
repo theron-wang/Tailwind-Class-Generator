@@ -297,7 +297,7 @@ internal class V4
                             if (sv.Variants.Any(v => int.TryParse(v, out _)))
                             {
                                 sv.Variants.Remove("33");
-                                if (v.UseSpacing != true)
+                                if (v.DirectVariants?.Contains(sv.Stem + "-{s}") != true)
                                 {
                                     var newStem = sv.Stem + "-{n}";
                                     v.UseSpacing = null;
@@ -358,7 +358,7 @@ internal class V4
                 if (v.DirectVariants.Any(v => int.TryParse(v, out _)))
                 {
                     v.DirectVariants.Remove("33");
-                    if (v.UseSpacing != true)
+                    if (!v.DirectVariants.Contains("{s}"))
                     {
                         v.DirectVariants.Add("{n}");
                         v.UseNumbers = true;
@@ -370,7 +370,7 @@ internal class V4
                     v.DirectVariants = null;
                 }
             }
-            
+
             if (v.Stem.EndsWith("px"))
             {
                 v.UseSpacing = true;
@@ -1207,7 +1207,7 @@ internal class V4
             {
                 generatedToActual[$"{@class.Stem}-(--my-var)"] = $"{@class.Stem}-{{a}}";
             }
-            
+
             if (@class.Stem.EndsWith("{s}"))
             {
                 var generate = @class.Stem.Replace("{s}", "px");

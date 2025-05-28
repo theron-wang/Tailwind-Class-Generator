@@ -37,9 +37,12 @@ optional	&:optional
 required	&:required
 valid	&:valid
 invalid	&:invalid
+user-valid	&:user-valid
+user-invalid	&:user-invalid
 in-range	&:in-range
 out-of-range	&:out-of-range
 placeholder-shown	&:placeholder-shown
+details-content	&:details-content
 autofill	&:autofill
 read-only	&:read-only
 before	&::before
@@ -92,12 +95,21 @@ max-[...]	@media (width < ...)
 @max-7xl	@container (width < 80rem)
 @max-[...]	@container (width < ...)
 dark	@media (prefers-color-scheme: dark)
-portrait	@media (orientation: portrait)
-landscape	@media (orientation: landscape)
 motion-safe	@media (prefers-reduced-motion: no-preference)
 motion-reduce	@media (prefers-reduced-motion: reduce)
 contrast-more	@media (prefers-contrast: more)
 contrast-less	@media (prefers-contrast: less)
+forced-colors	@media (forced-colors: active)
+inverted-colors	@media (inverted-colors: inverted)
+pointer-fine	@media (pointer: fine)
+pointer-coarse	@media (pointer: coarse)
+pointer-none	@media (pointer: none)
+any-pointer-fine	@media (any-pointer: fine)
+any-pointer-coarse	@media (any-pointer: coarse)
+any-pointer-none	@media (any-pointer: none)
+portrait	@media (orientation: portrait)
+landscape	@media (orientation: landscape)
+noscript	@media (scripting: none)
 print	@media print
 supports-[...]	@supports (...)
 aria-busy	&[aria-busy="true"]
@@ -111,8 +123,7 @@ aria-required	&[aria-required="true"]
 aria-selected	&[aria-selected="true"]
 aria-[...]	&[aria-...]
 data-[...]	&[data-...]
-rtl	[dir="rtl"] &
-ltr	[dir="ltr"] &
-open	&:is([open], :popover-open)
-forced-colors	@media (forced-colors: active)
+rtl	&:where(:dir(rtl), [dir="rtl"], [dir="rtl"] *)
+ltr	&:where(:dir(ltr), [dir="ltr"], [dir="ltr"] *)
+open	&:is([open], :popover-open, :open)
 starting	@starting-style
