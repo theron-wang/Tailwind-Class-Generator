@@ -626,6 +626,10 @@ internal class V4
         Dictionary<string, string> theme = [];
         Dictionary<string, string> colors = [];
 
+        colors["inherit"] = "inherit";
+        colors["current"] = "currentColor";
+        colors["transparent"] = "transparent";
+
         var started = false;
         var layers = 0;
 
@@ -737,6 +741,13 @@ internal class V4
                 var parts = line.Replace("...", "div").Split('\t');
 
                 await sw.WriteLineAsync($"{parts[0]}:p-px");
+
+                // @min-{c} missing from docs
+                if (parts[0].Contains("max"))
+                {
+                    await sw.WriteLineAsync($"{parts[0].Replace("max", "min")}:p-px");
+                }
+
                 if (!multipliers.Any(parts[0].StartsWith))
                 {
                     foreach (var m in multipliers)
@@ -816,7 +827,7 @@ internal class V4
                         layers--;
                         if (layers == 0)
                         {
-                            variantsToDescriptions[activeKey] = variantsToDescriptions[activeKey].Trim().Replace("div", "");
+                            variantsToDescriptions[activeKey] = variantsToDescriptions[activeKey].Trim().Replace("div", "{0}");
                             activeKey = null;
                             continue;
                         }
@@ -838,6 +849,26 @@ internal class V4
 
         // For some reason 32 gets generated; we need to remove it
         variantsToDescriptions.Remove("32");
+
+        // Breakpoints -> {b}
+        // Container -> {c}
+
+        foreach ((var variant, var desc) in variantsToDescriptions.Select(x => x).ToList())
+        {
+            if (variant.Contains("sm") || variant.Contains("md") || variant.Contains("lg") || variant.Contains("xl") || variant.Contains("xs"))
+            {
+                var size = variant.Split('-').Last().Trim('@');
+                var remIndex = desc.IndexOf("rem");
+                var remSize = desc.Substring(remIndex - 2, 5);
+
+                variantsToDescriptions.Remove(variant);
+                variantsToDescriptions[variant.Replace(size, variant.Contains('@') ? "{c}" : "{b}")] = desc.Replace(remSize, "{1}");
+                if (size != variant)
+                {
+                    variantsToDescriptions[variant.Replace(size, "{a}")] = desc.Replace(remSize, "{1}");
+                }
+            }
+        }
 
         outputPath = Path.Combine(Helpers.V4Folder, "variants.json");
 
@@ -1241,7 +1272,7 @@ internal class V4
             }
             else
             {
-                generatedToActual[variant] = variant;
+                generatedToActual[variant.Replace("{c}", "sm").Replace("{b}", "sm").Replace("{a}", "[10rem]")] = variant;
             }
         }
 

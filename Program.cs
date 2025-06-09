@@ -15,28 +15,47 @@ string? result;
 
 try
 {
-    Console.WriteLine("Would you like to use Tailwind v3 or v4?");
-    Console.Write("(3/4): ");
+    // Note: last Tailwind v4.0 is v4.0.17
+    Console.Write("What version (enter for latest, or in format x.x.x): ");
 
     result = Console.ReadLine()?.Trim();
 
-    if (result == "3")
-    {
-        Console.WriteLine("Using Tailwind v3");
+    Console.WriteLine();
 
+    if (string.IsNullOrWhiteSpace(result))
+    {
+        Console.WriteLine("Using latest version");
+
+        result = "latest";
+    }
+    else if (!int.TryParse(result.Replace(".", ""), out _))
+    {
+        Console.WriteLine("Invalid version. Using latest");
+
+        result = "latest";
+    }
+
+    var process = new Process();
+    Console.WriteLine("Updating");
+    process.StartInfo = new ProcessStartInfo("cmd")
+    {
+        WorkingDirectory = Helpers.BaseFolder,
+        RedirectStandardOutput = true,
+        Arguments = $"/c npm install {(result.StartsWith('3') ? "" : $"@tailwindcss/cli@{result}")} tailwindcss@{result}"
+    };
+
+    process.Start();
+    await process.WaitForExitAsync();
+
+    Console.WriteLine($"Version: {result}");
+    Console.WriteLine();
+
+    if (result.StartsWith('3'))
+    {
         await UseV3();
     }
     else
     {
-        if (result == "4")
-        {
-            Console.WriteLine("Using Tailwind v4");
-        }
-        else
-        {
-            Console.WriteLine("Invalid input. Defaulting to Tailwind v4.");
-        }
-
         await UseV4();
     }
 }
