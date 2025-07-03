@@ -399,3 +399,11 @@ h-lh
 min-h-lh
 max-h-lh
 border
+bg-gradient-to-b
+bg-gradient-to-bl
+bg-gradient-to-br
+bg-gradient-to-l
+bg-gradient-to-r
+bg-gradient-to-t
+bg-gradient-to-tl
+bg-gradient-to-tr
