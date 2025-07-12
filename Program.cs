@@ -11,28 +11,38 @@ var processInfo = new ProcessStartInfo("cmd")
     RedirectStandardInput = true
 };
 
-string? result;
-
 try
 {
     // Note: last Tailwind v4.0 is v4.0.17
     Console.Write("What version (enter for latest, or in format x.x.x): ");
 
-    result = Console.ReadLine()?.Trim();
+    var version = Console.ReadLine()?.Trim();
 
     Console.WriteLine();
 
-    if (string.IsNullOrWhiteSpace(result))
+    if (string.IsNullOrWhiteSpace(version))
     {
         Console.WriteLine("Using latest version");
 
-        result = "latest";
+        version = "latest";
     }
-    else if (!int.TryParse(result.Replace(".", ""), out _))
+    else if (!int.TryParse(version.Replace(".", ""), out _))
     {
         Console.WriteLine("Invalid version. Using latest");
 
-        result = "latest";
+        version = "latest";
+    }
+
+    Console.Write("Minify (enter for no, or any character for yes): ");
+
+    var minify = Console.ReadKey().Key.ToString();
+    var minifyBool = true;
+
+    Console.WriteLine();
+
+    if (string.IsNullOrWhiteSpace(minify))
+    {
+        minifyBool = false;
     }
 
     var process = new Process();
@@ -41,22 +51,22 @@ try
     {
         WorkingDirectory = Helpers.BaseFolder,
         RedirectStandardOutput = true,
-        Arguments = $"/c npm install {(result.StartsWith('3') ? "" : $"@tailwindcss/cli@{result}")} tailwindcss@{result}"
+        Arguments = $"/c npm install {(version.StartsWith('3') ? "" : $"@tailwindcss/cli@{version}")} tailwindcss@{version}"
     };
 
     process.Start();
     await process.WaitForExitAsync();
 
-    Console.WriteLine($"Version: {result}");
+    Console.WriteLine($"Version: {version}");
     Console.WriteLine();
 
-    if (result.StartsWith('3'))
+    if (version.StartsWith('3'))
     {
         await UseV3();
     }
     else
     {
-        await UseV4();
+        await UseV4(minifyBool);
     }
 }
 catch (Exception e)
@@ -75,7 +85,7 @@ async Task UseV3()
     Console.WriteLine("Do you need to build?");
     Console.Write("(y/n): ");
 
-    result = Console.ReadLine()?.Trim().ToLower();
+    var result = Console.ReadLine()?.Trim().ToLower();
 
     while (string.IsNullOrWhiteSpace(result) == false && result != "y" && result != "n")
     {
@@ -113,7 +123,7 @@ async Task UseV3()
     Console.WriteLine("Extraction complete.");
 }
 
-async Task UseV4()
+async Task UseV4(bool minify)
 {
     try
     {
@@ -129,7 +139,7 @@ async Task UseV4()
         await V4.CompileClasses();
 
         Console.WriteLine("Extracting classes and descriptions");
-        await V4.ExtractClassesAndDescriptions();
+        await V4.ExtractClassesAndDescriptions(minify);
 
         Console.WriteLine("Extracting default theme");
         await V4.ExtractDefaultTheme();

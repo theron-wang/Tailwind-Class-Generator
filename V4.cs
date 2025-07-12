@@ -150,7 +150,7 @@ internal class V4
         await process!.WaitForExitAsync();
     }
 
-    public static async Task ExtractClassesAndDescriptions()
+    public static async Task ExtractClassesAndDescriptions(bool minify)
     {
         var outputPath = Path.Combine(Helpers.BaseFolder, "v4.output.css");
         HashSet<string> uniqueClasses = await GetClassesFromCssFile(outputPath);
@@ -273,6 +273,12 @@ internal class V4
                             if (sv.Variants.Any(v => v.EndsWith('%')))
                             {
                                 sv.Variants.Remove("51%");
+
+                                if (minify)
+                                {
+                                    sv.Variants.RemoveAll(v => v.EndsWith('%'));
+                                }
+
                                 var newStem = sv.Stem + "-{%}";
                                 v.UsePercent = true;
                                 if (v.DirectVariants is null || v.DirectVariants.Contains(newStem) == false)
@@ -285,6 +291,17 @@ internal class V4
                             if (sv.Variants.Any(v => v.Contains('/')))
                             {
                                 sv.Variants.Remove("2/7");
+                                sv.Variants.RemoveAll(sv =>
+                                {
+                                    if (!sv.Contains('/'))
+                                    {
+                                        return false;
+                                    }
+
+                                    var parts = sv.Split('/');
+
+                                    return parts.Length == 2 && int.TryParse(parts[0], out _) && int.TryParse(parts[1], out _);
+                                });
                                 var newStem = sv.Stem + "-{f}";
                                 v.UseFractions = true;
                                 if (v.DirectVariants is null || v.DirectVariants.Contains(newStem) == false)
@@ -297,6 +314,12 @@ internal class V4
                             if (sv.Variants.Any(v => int.TryParse(v, out _)))
                             {
                                 sv.Variants.Remove("33");
+
+                                if (minify)
+                                {
+                                    sv.Variants.RemoveAll(v => double.TryParse(v, out _));
+                                }
+
                                 if (v.DirectVariants?.Contains(sv.Stem + "-{s}") != true)
                                 {
                                     var newStem = sv.Stem + "-{n}";
@@ -344,6 +367,12 @@ internal class V4
                 if (v.DirectVariants.Any(v => v.EndsWith('%')))
                 {
                     v.DirectVariants.Remove("51%");
+
+                    if (minify)
+                    {
+                        v.DirectVariants.RemoveAll(v => v.EndsWith('%'));
+                    }
+
                     v.DirectVariants.Add("{%}");
                     v.UsePercent = true;
                 }
@@ -351,6 +380,19 @@ internal class V4
                 if (v.DirectVariants.Any(v => v.Contains('/')))
                 {
                     v.DirectVariants.Remove("2/7");
+
+                    v.DirectVariants.RemoveAll(sv =>
+                    {
+                        if (!sv.Contains('/'))
+                        {
+                            return false;
+                        }
+
+                        var parts = sv.Split('/');
+
+                        return parts.Length == 2 && int.TryParse(parts[0], out _) && int.TryParse(parts[1], out _);
+                    });
+
                     v.DirectVariants.Add("{f}");
                     v.UseFractions = true;
                 }
@@ -358,6 +400,12 @@ internal class V4
                 if (v.DirectVariants.Any(v => int.TryParse(v, out _)))
                 {
                     v.DirectVariants.Remove("33");
+
+                    if (minify)
+                    {
+                        v.DirectVariants.RemoveAll(v => double.TryParse(v, out _));
+                    }
+
                     if (!v.DirectVariants.Contains("{s}"))
                     {
                         v.DirectVariants.Add("{n}");
@@ -1043,10 +1091,9 @@ internal class V4
             }
         }
 
-        var extra = generatedToActual.Keys.Where(k => !dict.ContainsKey(k));
+        var extra = generatedToActual.Where(k => !dict.ContainsKey(k.Key));
 
-        // There is one edge case right now, if any more arise something is wrong
-        Debug.Assert(extra.Count() == 1);
+        Debug.Assert(!extra.Any());
 
         var descriptions = new Dictionary<string, string>();
 
@@ -1170,7 +1217,7 @@ internal class V4
                     {
                         continue;
                     }
-                    if (@class.UseNumbers == true && int.TryParse(v, out _))
+                    if (@class.UseNumbers == true && double.TryParse(v, out _))
                     {
                         continue;
                     }
@@ -1212,7 +1259,7 @@ internal class V4
                         {
                             continue;
                         }
-                        if (@class.UseNumbers == true && int.TryParse(v, out _))
+                        if (@class.UseNumbers == true && double.TryParse(v, out _))
                         {
                             continue;
                         }
@@ -1239,21 +1286,27 @@ internal class V4
                 generatedToActual[$"{@class.Stem}-(--my-var)"] = $"{@class.Stem}-{{a}}";
             }
 
-            if (@class.Stem.EndsWith("{s}"))
-            {
-                var generate = @class.Stem.Replace("{s}", "px");
-
-                generatedToActual[generate] = @class.Stem;
-            }
-            else if (@class.DirectVariants is null && @class.Subvariants is null && @class.HasArbitrary != true)
+            if (@class.DirectVariants is null && @class.Subvariants is null)
             {
                 if (@class.Stem == "peer" || @class.Stem == "group")
                 {
                     continue;
                 }
-                generatedToActual[@class.Stem] = @class.Stem;
+
+                var generate = @class.Stem.Replace("{s}", "px").Replace("{c}", "black").Replace("{n}", "33").Replace("{f}", "2/7").Replace("{%}", "51%");
+
+                generatedToActual[generate] = @class.Stem;
+                generate = @class.Stem.Replace("{s}", "(--my-var)").Replace("{c}", "(--my-var)").Replace("{n}", "(--my-var)").Replace("{f}", "(--my-var)").Replace("{%}", "(--my-var)");
+
+                if (generate != @class.Stem)
+                {
+                    generatedToActual[generate] = generate.Replace("(--my-var)", "{a}");
+                }
             }
         }
+
+        // This doesn't work
+        generatedToActual.Remove("-bg-linear-(--my-var)");
 
         return generatedToActual;
     }
