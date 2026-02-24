@@ -7,129 +7,90 @@ namespace AllTailwindClassesGenerator;
 
 internal class V4
 {
-    public static async Task GenerateClassesFromV3()
+    public static async Task ParseAllTailwindClasses(string version)
     {
-        var baseClasses = Path.Combine(Helpers.BaseFolder, "tailwindclasses-base.json");
+        // Conveniently, a list of classes after v4 is located here:
+        // https://raw.githubusercontent.com/tailwindlabs/tailwindcss/{version}/packages/tailwindcss/src/__snapshots__/intellisense.test.ts.snap
 
-        List<V3.Variant>? variants;
+        var url = $"https://raw.githubusercontent.com/tailwindlabs/tailwindcss/{version}/packages/tailwindcss/src/__snapshots__/intellisense.test.ts.snap";
 
-        using (var fs = new FileStream(baseClasses, FileMode.Open, FileAccess.Read, FileShare.Read))
+        Stream raw;
+
+        using (var http = new HttpClient())
         {
-            variants = await JsonSerializer.DeserializeAsync<List<V3.Variant>>(fs);
+            var response = await http.GetAsync(url);
+            response.EnsureSuccessStatusCode();
+
+            raw = await response.Content.ReadAsStreamAsync();
         }
 
-        Debug.Assert(variants != null);
-
-        var classes = new List<string>();
-
-        foreach (var variant in variants)
+        // File format is as follows:
+        // exports[`getClassList 1`] = `
+        // ... then a JSON-parseable array of class strings, separated by comma and newline
+        // ]
+        // exports[`getVariants 1`] = `
+        // ... then a JSON-parseable array of variants (see example below)
+        /*
         {
-            var variantClasses = new List<string>();
+            "hasDash": true,
+            "isArbitrary": false,
+            "name": "*",
+            "selectors": [Function],
+            "values": [],
+        }
+        */
 
-            if (variant.DirectVariants != null && variant.DirectVariants.Count > 0)
+        List<string>? classes = null;
+        using (raw)
+        {
+            using var sr = new StreamReader(raw);
+            while (sr.EndOfStream == false)
             {
-                foreach (var v in variant.DirectVariants)
+                var line = await sr.ReadLineAsync();
+                if (line != null && line.StartsWith("exports[`getClassList"))
                 {
-                    if (string.IsNullOrWhiteSpace(v))
+                    var sb = new StringBuilder();
+                    while (sr.EndOfStream == false)
                     {
-                        variantClasses.Add(variant.Stem);
-                    }
-                    else
-                    {
-                        if (v.Contains("{s}"))
+                        var l = await sr.ReadLineAsync();
+                        if (l != null && l.Contains(']'))
                         {
-                            variantClasses.Add(variant.Stem + "-" + v.Replace("{s}", "px"));
+                            break;
                         }
-                        else if (v.Contains("{c}"))
-                        {
-                            variantClasses.Add(variant.Stem + "-" + v.Replace("{c}", "black"));
-                        }
-                        else
-                        {
-                            variantClasses.Add(variant.Stem + "-" + v);
-                        }
+                        sb.AppendLine(l);
                     }
-                }
-            }
 
-            if (variant.Subvariants != null && variant.Subvariants.Count > 0)
-            {
-                // Do the same check for each of the subvariants as above
+                    var json = sb.ToString().Trim();
 
-                foreach (var subvariant in variant.Subvariants)
-                {
-                    if (subvariant.Variants != null)
+                    if (json.EndsWith(','))
                     {
-                        foreach (var v in subvariant.Variants)
-                        {
-                            if (string.IsNullOrWhiteSpace(v))
-                            {
-                                variantClasses.Add(variant.Stem + "-" + subvariant.Stem);
-                            }
-                            else
-                            {
-                                variantClasses.Add(variant.Stem + "-" + subvariant.Stem + "-" + v);
-                            }
-                        }
+                        json = json[..^1];
                     }
 
-                    if (subvariant.Stem.Contains("{c}"))
-                    {
-                        variantClasses.Add(variant.Stem + "-" + subvariant.Stem.Replace("{c}", "black"));
-                    }
-                    else if (subvariant.Stem.Contains("{s}"))
-                    {
-                        variantClasses.Add(variant.Stem + "-" + subvariant.Stem.Replace("{s}", "px"));
-                    }
-                }
-            }
+                    json = $"{json}]";
 
-            if ((variant.DirectVariants == null || variant.DirectVariants.Count == 0) && (variant.Subvariants == null || variant.Subvariants.Count == 0))
-            {
-                var name = variant.Stem;
-                if (variant.UseColors == true)
-                {
-                    name += "-black";
+                    classes = JsonSerializer.Deserialize<List<string>>(json);
                 }
-                else if (variant.UseSpacing == true)
-                {
-                    name += "-px";
-                }
-                variantClasses.Add(name);
-            }
-
-            classes.AddRange(variantClasses);
-
-            if (variant.HasNegative == true)
-            {
-                classes.AddRange(variantClasses.Select(c => $"-{c}"));
             }
         }
 
-        var addedClassesPath = Path.Combine(Helpers.BaseFolder, "v4-added-classes.txt");
-
+        if (classes != null)
         {
-            using var fs = new FileStream(addedClassesPath, FileMode.Open, FileAccess.Read, FileShare.Read);
-            using var sr = new StreamReader(fs);
-            while (await sr.ReadLineAsync() is var line && line is not null)
+            // Some classes may have /s that are not fractions -- remove those
+            classes.RemoveAll(c =>
             {
-                line = line.Trim();
-                classes.Add(line);
-                // 33, 2/7, 51% are not included anywhere so we know they are added synthetically here
-                classes.Add($"-{line}");
-                classes.Add($"{line}-px");
-                classes.Add($"-{line}-px");
-                classes.Add($"{line}-33");
-                classes.Add($"-{line}-33");
-                classes.Add($"{line}-black");
-                classes.Add($"{line}-51%");
-                classes.Add($"-{line}-51%");
-                classes.Add($"{line}-2/7");
-                classes.Add($"-{line}-2/7");
-            }
-        }
+                if (!c.Contains('/'))
+                {
+                    return false;
+                }
 
-        await WriteAllClasses(classes);
+                var last = c.Split('-').Last();
+
+                return last.Split('/').Length != 2 || last.Split('/').Any(part => !int.TryParse(part, out _));
+            });
+
+            await WriteAllClasses(classes);
+        }
     }
 
     public static async Task CompileClasses()
@@ -248,8 +209,10 @@ internal class V4
                                 continue;
                             }
 
-                            if (sv.Variants.Remove("black"))
+                            if (sv.Variants.Remove("transparent"))
                             {
+                                sv.Variants.Remove("current");
+                                sv.Variants.Remove("inherit");
                                 var newStem = sv.Stem + "-{c}";
                                 v.UseColors = true;
                                 if (v.DirectVariants is null || v.DirectVariants.Contains(newStem) == false)
@@ -269,12 +232,13 @@ internal class V4
                                     v.DirectVariants ??= [];
                                     v.DirectVariants.Add(newStem);
                                 }
+
+                                // Never preserve numbers if in a spacing class
+                                sv.Variants.RemoveAll(v => double.TryParse(v, out _));
                             }
 
                             if (sv.Variants.Any(v => v.EndsWith('%')))
                             {
-                                sv.Variants.Remove("51%");
-
                                 if (minify)
                                 {
                                     sv.Variants.RemoveAll(v => v.EndsWith('%'));
@@ -291,7 +255,6 @@ internal class V4
 
                             if (sv.Variants.Any(v => v.Contains('/')))
                             {
-                                sv.Variants.Remove("2/7");
                                 sv.Variants.RemoveAll(sv =>
                                 {
                                     if (!sv.Contains('/'))
@@ -314,8 +277,6 @@ internal class V4
 
                             if (sv.Variants.Any(v => int.TryParse(v, out _)))
                             {
-                                sv.Variants.Remove("33");
-
                                 if (minify)
                                 {
                                     sv.Variants.RemoveAll(v => double.TryParse(v, out _));
@@ -357,18 +318,22 @@ internal class V4
                     v.DirectVariants.Add("{s}");
                     v.UseSpacing = true;
                     v.UseNumbers = null;
+
+                    // Never preserve numbers if in a spacing class
+                    v.DirectVariants.RemoveAll(v => double.TryParse(v, out _));
                 }
 
-                if (v.DirectVariants.Remove("black"))
+
+                if (v.DirectVariants.Remove("transparent"))
                 {
+                    v.DirectVariants.Remove("current");
+                    v.DirectVariants.Remove("inherit");
                     v.DirectVariants.Add("{c}");
                     v.UseColors = true;
                 }
 
                 if (v.DirectVariants.Any(v => v.EndsWith('%')))
                 {
-                    v.DirectVariants.Remove("51%");
-
                     if (minify)
                     {
                         v.DirectVariants.RemoveAll(v => v.EndsWith('%'));
@@ -380,8 +345,6 @@ internal class V4
 
                 if (v.DirectVariants.Any(v => v.Contains('/')))
                 {
-                    v.DirectVariants.Remove("2/7");
-
                     v.DirectVariants.RemoveAll(sv =>
                     {
                         if (!sv.Contains('/'))
@@ -400,8 +363,6 @@ internal class V4
 
                 if (v.DirectVariants.Any(v => int.TryParse(v, out _)))
                 {
-                    v.DirectVariants.Remove("33");
-
                     if (minify)
                     {
                         v.DirectVariants.RemoveAll(v => double.TryParse(v, out _));
@@ -420,27 +381,24 @@ internal class V4
                 }
             }
 
-            if (v.Stem.EndsWith("px"))
+            if (v.Stem.Length > 2 && v.Stem.EndsWith("px"))
             {
                 v.UseSpacing = true;
                 v.Stem = $"{v.Stem[..^3]}-{{s}}";
             }
 
-            if (v.UseColors != true && v.UseSpacing != true && v.UseFractions != true && v.UsePercent != true)
+            if ((v.DirectVariants is null || v.DirectVariants.Count == 0) && v.Subvariants is not null && v.Subvariants.Count == 1)
             {
-                if ((v.DirectVariants is null || v.DirectVariants.Count == 0) && v.Subvariants is not null && v.Subvariants.Count == 1)
-                {
-                    var sub = v.Subvariants[0];
-                    v.Stem += $"-{sub.Stem}";
-                    v.DirectVariants = sub.Variants;
+                var sub = v.Subvariants[0];
+                v.Stem += $"-{sub.Stem}";
+                v.DirectVariants = sub.Variants;
 
-                    v.Subvariants = null;
-                }
-                if ((v.Subvariants is null || v.Subvariants.Count == 0) && v.DirectVariants is not null && v.DirectVariants.Count == 1)
-                {
-                    v.Stem += $"-{v.DirectVariants[0]}";
-                    v.DirectVariants = null;
-                }
+                v.Subvariants = null;
+            }
+            if ((v.Subvariants is null || v.Subvariants.Count == 0) && v.DirectVariants is not null && v.DirectVariants.Count == 1)
+            {
+                v.Stem += $"-{v.DirectVariants[0]}";
+                v.DirectVariants = null;
             }
 
             if (v.Subvariants is not null)

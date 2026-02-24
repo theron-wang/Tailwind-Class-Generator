@@ -140,7 +140,7 @@ async Task UseV4(bool minify)
         }
 
         Console.WriteLine("Getting all classes");
-        await V4.GenerateClassesFromV3();
+        await V4.ParseAllTailwindClasses(await GetVersion());
 
         Console.WriteLine("Building classes");
         await V4.CompileClasses();
@@ -185,4 +185,47 @@ async Task UseV4(bool minify)
             File.Delete(Path.Combine(Helpers.V4Folder, "all-variants.txt"));
         }
     }
+}
+
+async Task<string> GetVersion()
+{
+    var processInfo = new ProcessStartInfo()
+    {
+        UseShellExecute = false,
+        RedirectStandardOutput = true,
+        CreateNoWindow = true,
+        FileName = "cmd",
+        Arguments = "/C npm list tailwindcss --depth=0",
+        WorkingDirectory = Helpers.BaseFolder
+    };
+
+
+    using var process = Process.Start(processInfo);
+    var output = await process!.StandardOutput.ReadToEndAsync();
+
+    await process.WaitForExitAsync();
+
+    // Could be extra stuff in the beginning and the end
+    output = output[output.IndexOf("tailwindcss")..];
+
+    // Sample output: `-- tailwindcss@4.0.0
+    var indexOfFirstDigit = -1;
+    var end = 0;
+    for (var i = 0; i < output.Length; i++)
+    {
+        if (indexOfFirstDigit == -1)
+        {
+            if (char.IsDigit(output[i]))
+            {
+                indexOfFirstDigit = i;
+            }
+        }
+        else if (!char.IsDigit(output[i]) && output[i] != '.')
+        {
+            end = i;
+            break;
+        }
+    }
+
+    return $"v{output[indexOfFirstDigit..end].Trim()}";
 }
