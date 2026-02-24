@@ -426,6 +426,12 @@ internal class V4
                 v.Stem = $"{v.Stem[..^3]}-{{s}}";
             }
 
+            if (v.Stem.EndsWith("black"))
+            {
+                v.UseColors = true;
+                v.Stem = $"{v.Stem[..^6]}-{{c}}";
+            }
+
             if (v.UseColors != true && v.UseSpacing != true && v.UseFractions != true && v.UsePercent != true)
             {
                 if ((v.DirectVariants is null || v.DirectVariants.Count == 0) && v.Subvariants is not null && v.Subvariants.Count == 1)
