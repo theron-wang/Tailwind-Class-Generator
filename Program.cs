@@ -14,6 +14,7 @@ var processInfo = new ProcessStartInfo("cmd")
 try
 {
     // Note: last Tailwind v4.0 is v4.0.17
+    // Note: last Tailwind v4.1 is v4.1.18
     Console.Write("What version (enter for latest, or in format x.x.x): ");
 
     var version = Console.ReadLine()?.Trim();
@@ -23,27 +24,33 @@ try
     if (string.IsNullOrWhiteSpace(version))
     {
         Console.WriteLine("Using latest version");
+        Console.WriteLine();
 
         version = "latest";
     }
     else if (!int.TryParse(version.Replace(".", ""), out _))
     {
         Console.WriteLine("Invalid version. Using latest");
+        Console.WriteLine();
 
         version = "latest";
     }
 
     Console.Write("Minify (enter for no, or any character for yes): ");
 
-    var minify = Console.ReadKey().Key.ToString();
+    var minify = Console.ReadKey().Key;
     var minifyBool = true;
 
     Console.WriteLine();
 
-    if (string.IsNullOrWhiteSpace(minify))
+    if (minify == ConsoleKey.Enter)
     {
         minifyBool = false;
     }
+
+    // Minify means to not include classes like p-20; only include p-{n}
+    Console.WriteLine($"Minify: {minifyBool}");
+    Console.WriteLine();
 
     var process = new Process();
     Console.WriteLine("Updating");

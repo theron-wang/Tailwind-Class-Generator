@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace AllTailwindClassesGenerator;
+
 internal class V4
 {
     public static async Task GenerateClassesFromV3()
@@ -471,9 +472,13 @@ internal class V4
                         .ThenBy(item =>
                         {
                             if (double.TryParse(item.TrimEnd('%'), out double numericValue))
+                            {
                                 return numericValue;
+                            }
                             else
+                            {
                                 return int.MaxValue;
+                            }
                         })
                         .ThenBy(item => item)];
                     }
@@ -495,9 +500,13 @@ internal class V4
                 .ThenBy(item =>
                 {
                     if (double.TryParse(item.TrimEnd('%'), out double numericValue))
+                    {
                         return numericValue;
+                    }
                     else
+                    {
                         return int.MaxValue;
+                    }
                 })
                 .ThenBy(item => item)];
             }
