@@ -13,8 +13,9 @@ var processInfo = new ProcessStartInfo("cmd")
 
 try
 {
-    // Note: last Tailwind v4.0 is v4.0.17
-    // Note: last Tailwind v4.1 is v4.1.18
+    // last Tailwind v4.0 is v4.0.17
+    // last Tailwind v4.1 is v4.1.18
+    // last Tailwind v4.2 is v4.2.4
     Console.Write("What version (enter for latest, or in format x.x.x): ");
 
     var version = Console.ReadLine()?.Trim();
