@@ -46,6 +46,7 @@ public class V4DiffRevertTests
     [Fact]
     public async Task Revert_Restores_Original_Files_With_Actual_Versions_4_0_17_And_4_3_0()
     {
+        // V4 generation currently shells out through `cmd` in production code paths.
         if (!OperatingSystem.IsWindows())
         {
             return;
@@ -195,7 +196,7 @@ public class V4DiffRevertTests
         var stderr = await process.StandardError.ReadToEndAsync();
         await process.WaitForExitAsync();
 
-        Assert.True(process.ExitCode == 0, $"npm install failed for {version}.{Environment.NewLine}{stdout}{Environment.NewLine}{stderr}");
+        Assert.Equal(0, process.ExitCode);
     }
 
     private static void CopyProgramInputs(string repositoryRoot, string workspaceRoot)
