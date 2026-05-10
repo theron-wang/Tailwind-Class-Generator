@@ -194,7 +194,7 @@ internal static class V4Diff
 
             while (left < right)
             {
-                var middle = (left + right) / 2;
+                var middle = left + (right - left) / 2;
 
                 if (values[tails[middle]] < values[i])
                 {

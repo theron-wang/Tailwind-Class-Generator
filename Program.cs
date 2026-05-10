@@ -79,7 +79,7 @@ try
             var tempRoot = Path.Combine(Path.GetTempPath(), "tailwind-class-generator");
             Directory.CreateDirectory(tempRoot);
 
-            var diffSourceFolder = Path.Combine(tempRoot, $"v4-diff-{Guid.NewGuid():N}");
+            var diffSourceFolder = Path.Combine(tempRoot, $"v4-diff-{Guid.NewGuid():N}"[..20]);
 
             try
             {
@@ -267,7 +267,7 @@ static string? NormalizeOptionalVersion(string? version)
 
 static bool IsValidVersion(string version)
 {
-    return Regex.IsMatch(version, @"^\d+\.\d+\.\d+$");
+    return VersionValidator.Pattern().IsMatch(version);
 }
 
 static async Task InstallVersion(string version)
@@ -295,4 +295,10 @@ static void CopyV4Outputs(string destinationFolder)
 
         File.Copy(sourcePath, destinationPath, true);
     }
+}
+
+static partial class VersionValidator
+{
+    [GeneratedRegex(@"^\d+\.\d+\.\d+$")]
+    public static partial Regex Pattern();
 }
