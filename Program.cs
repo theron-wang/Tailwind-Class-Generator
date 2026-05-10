@@ -75,7 +75,10 @@ try
         }
         else
         {
-            var diffSourceFolder = Path.Combine(Path.GetTempPath(), $"tailwind-v4-diff-{Guid.NewGuid():N}");
+            var tempRoot = Path.Combine(Path.GetTempPath(), "tailwind-class-generator");
+            Directory.CreateDirectory(tempRoot);
+
+            var diffSourceFolder = Path.Combine(tempRoot, $"v4-diff-{Guid.NewGuid():N}");
 
             try
             {

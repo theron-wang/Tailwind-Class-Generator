@@ -269,15 +269,20 @@ internal static class V4Diff
 
     private static void ValidateUnique(List<string> values, string path)
     {
-        if (values.Count != values.Distinct().Count())
+        HashSet<string> seen = [];
+
+        foreach (var value in values)
         {
-            throw new InvalidDataException($"{path} must not contain duplicate entries.");
+            if (!seen.Add(value))
+            {
+                throw new InvalidDataException($"{path} must not contain duplicate entries.");
+            }
         }
     }
 
     private static async Task WriteJson(string path, JsonObject value)
     {
-        await using var stream = File.Open(path, FileMode.Create, FileAccess.Write, FileShare.ReadWrite);
+        await using var stream = File.Open(path, FileMode.Create, FileAccess.Write, FileShare.Read);
         await JsonSerializer.SerializeAsync(stream, value);
     }
 }
