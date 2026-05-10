@@ -8,25 +8,25 @@ public class V4DiffRevertTests
     [Fact]
     public async Task Revert_Restores_Original_Files()
     {
-        var root = Path.Combine(Path.GetTempPath(), $"v4diff-test-{Guid.NewGuid():N}");
-        var v1 = Path.Combine(root, "v1");
-        var v2 = Path.Combine(root, "v2");
-        var reverted = Path.Combine(root, "reverted");
+        var testRootDirectory = Path.Combine(Path.GetTempPath(), $"v4diff-test-{Guid.NewGuid():N}");
+        var originalDirectory = Path.Combine(testRootDirectory, "v1");
+        var modifiedDirectory = Path.Combine(testRootDirectory, "v2");
+        var revertedDirectory = Path.Combine(testRootDirectory, "reverted");
 
-        Directory.CreateDirectory(v1);
-        Directory.CreateDirectory(v2);
+        Directory.CreateDirectory(originalDirectory);
+        Directory.CreateDirectory(modifiedDirectory);
 
         try
         {
-            await WriteFixtures(v1, v2);
+            await WriteFixtures(originalDirectory, modifiedDirectory);
 
-            await V4Diff.Generate(v1, v2);
-            await V4Diff.Revert(v2, Path.Combine(v2, "diff"), reverted);
+            await V4Diff.Generate(originalDirectory, modifiedDirectory);
+            await V4Diff.Revert(modifiedDirectory, Path.Combine(modifiedDirectory, "diff"), revertedDirectory);
 
             foreach (var file in V4Diff.DiffableFiles)
             {
-                var expected = await ReadJson(Path.Combine(v1, file));
-                var actual = await ReadJson(Path.Combine(reverted, file));
+                var expected = await ReadJson(Path.Combine(originalDirectory, file));
+                var actual = await ReadJson(Path.Combine(revertedDirectory, file));
 
                 Assert.True(
                     JsonNode.DeepEquals(Normalize(file, expected), Normalize(file, actual)),
@@ -35,9 +35,9 @@ public class V4DiffRevertTests
         }
         finally
         {
-            if (Directory.Exists(root))
+            if (Directory.Exists(testRootDirectory))
             {
-                Directory.Delete(root, true);
+                Directory.Delete(testRootDirectory, true);
             }
         }
     }

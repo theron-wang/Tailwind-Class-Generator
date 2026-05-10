@@ -803,9 +803,9 @@ internal class V4
 
         using (var fs = new FileStream(Path.Combine(Helpers.BaseFolder, "v4.css"), FileMode.Create, FileAccess.Write, FileShare.ReadWrite))
         {
-            using var sw = new StreamWriter(fs);
-            await sw.WriteLineAsync("@import \"tailwindcss\" source(none);");
-            await sw.WriteLineAsync("@source \"./v4/all-variants.txt\";");
+            using var cssFileWriter = new StreamWriter(fs);
+            await cssFileWriter.WriteLineAsync("@import \"tailwindcss\" source(none);");
+            await cssFileWriter.WriteLineAsync("@source \"./v4/all-variants.txt\";");
         }
 
         var processInfo = new ProcessStartInfo("cmd")
@@ -1147,7 +1147,8 @@ internal class V4
         var normalized = Regex.Replace(section, @",\s*\]", "]");
         var classes = JsonSerializer.Deserialize<List<string>>(normalized) ?? [];
 
-        // Some classes may have /s that are not fractions -- remove those
+        // Some classes include slash-delimited suffixes (e.g. color spaces or interpolation names) that are
+        // not numeric fractions; keep only entries whose final segment is a numeric fraction (x/y).
         classes.RemoveAll(c =>
         {
             if (!c.Contains('/'))
@@ -1272,7 +1273,10 @@ internal class V4
 
         using var http = new HttpClient();
         using var response = await http.GetAsync(url);
-        response.EnsureSuccessStatusCode();
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new HttpRequestException($"Failed to download Tailwind intellisense snapshot for {versionTag} from {url}. Status code: {response.StatusCode}");
+        }
 
         return await response.Content.ReadAsStringAsync();
     }

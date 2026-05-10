@@ -13,6 +13,12 @@
     </AssemblyAttribute>
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Remove="tests/**/*.cs" />
+    <EmbeddedResource Remove="tests/**/*.resx" />
+    <None Remove="tests/**/*.cs" />
+  </ItemGroup>
+
   <ProjectExtensions><VisualStudio><UserProperties v4_4diff_4theme_1json__JsonSchema="" /></VisualStudio></ProjectExtensions>
 
 </Project>

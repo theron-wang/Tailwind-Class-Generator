@@ -246,7 +246,7 @@ static async Task<string> GetInstalledTailwindVersionTag()
 
     if (!match.Success)
     {
-        throw new InvalidOperationException("Unable to determine installed tailwindcss version.");
+        throw new InvalidOperationException($"Unable to determine installed tailwindcss version from npm output: {output.Trim()}. Ensure tailwindcss is installed (for example: npm install tailwindcss).");
     }
 
     return $"v{match.Groups["version"].Value}";
