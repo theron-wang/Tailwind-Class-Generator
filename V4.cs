@@ -107,12 +107,24 @@ internal class V4
             }
         }
 
-        var existing = classes.ToHashSet();
         foreach (var addedClass in await LoadClassesFromSnapshot(versionTag))
         {
-            if (existing.Add(addedClass))
+            var line = addedClass.Trim();
+            if (string.IsNullOrWhiteSpace(line))
             {
-                classes.Add(addedClass);
+                continue;
+            }
+
+            AddSyntheticClassEntries(classes, line);
+
+            var lastDash = line.LastIndexOf('-');
+            if (lastDash > 0)
+            {
+                var stem = line[..lastDash];
+                if (!string.IsNullOrWhiteSpace(stem))
+                {
+                    AddSyntheticClassEntries(classes, stem);
+                }
             }
         }
 
@@ -1291,6 +1303,21 @@ internal class V4
         {
             await sw.WriteLineAsync(c);
         }
+    }
+
+    private static void AddSyntheticClassEntries(List<string> classes, string line)
+    {
+        classes.Add(line);
+        classes.Add($"-{line}");
+        classes.Add($"{line}-px");
+        classes.Add($"-{line}-px");
+        classes.Add($"{line}-33");
+        classes.Add($"-{line}-33");
+        classes.Add($"{line}-black");
+        classes.Add($"{line}-51%");
+        classes.Add($"-{line}-51%");
+        classes.Add($"{line}-2/7");
+        classes.Add($"-{line}-2/7");
     }
 
     private static async Task<HashSet<string>> GetClassesFromCssFile(string outputPath)
