@@ -207,10 +207,11 @@ internal static class V4Diff
             .ToHashSet();
 
         var result = current.Where(item => !addedItems.Contains(item)).ToList();
+        var existing = result.ToHashSet();
 
         foreach (var item in remove.OfType<JsonValue>().Select(v => v.GetValue<string>()))
         {
-            if (!result.Contains(item))
+            if (existing.Add(item))
             {
                 result.Add(item);
             }

@@ -6,6 +6,8 @@ namespace AllTailwindClassesGenerator.Tests;
 
 public class V4DiffRevertTests
 {
+    private static readonly HttpClient HttpClient = new();
+
     [Fact]
     public async Task Revert_Restores_Original_Files()
     {
@@ -211,8 +213,7 @@ public class V4DiffRevertTests
 
     private static async Task<string> DownloadIntellisenseSnapshot(string versionTag)
     {
-        using var client = new HttpClient();
-        using var response = await client.GetAsync($"https://raw.githubusercontent.com/tailwindlabs/tailwindcss/{versionTag}/packages/tailwindcss/src/__snapshots__/intellisense.test.ts.snap");
+        using var response = await HttpClient.GetAsync($"https://raw.githubusercontent.com/tailwindlabs/tailwindcss/{versionTag}/packages/tailwindcss/src/__snapshots__/intellisense.test.ts.snap");
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadAsStringAsync();
     }

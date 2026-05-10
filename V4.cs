@@ -1307,6 +1307,8 @@ internal class V4
 
     private static void AddSyntheticClassEntries(List<string> classes, string line)
     {
+        // Keep these representative values to preserve existing placeholder inference:
+        // spacing (px), numbers (33), colors (black), percentages (51%), fractions (2/7).
         classes.Add(line);
         classes.Add($"-{line}");
         classes.Add($"{line}-px");
