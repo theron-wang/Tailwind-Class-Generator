@@ -1,13 +1,11 @@
 ﻿using System.Text.Json;
 using System.Text.Json.Nodes;
-using System.Text.RegularExpressions;
+using System.Diagnostics;
 
 namespace AllTailwindClassesGenerator.Tests;
 
 public class V4DiffRevertTests
 {
-    private static readonly HttpClient HttpClient = new();
-
     [Fact]
     public async Task Revert_Restores_Original_Files()
     {
@@ -48,18 +46,32 @@ public class V4DiffRevertTests
     [Fact]
     public async Task Revert_Restores_Original_Files_With_Actual_Versions_4_0_17_And_4_3_0()
     {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
         var testRootDirectory = Path.Combine(Path.GetTempPath(), $"v4diff-real-{Guid.NewGuid():N}");
-        var originalDirectory = Path.Combine(testRootDirectory, "v4.0.17");
-        var modifiedDirectory = Path.Combine(testRootDirectory, "v4.3.0");
+        var originalDirectory = Path.Combine(testRootDirectory, "v4_0_17");
+        var modifiedDirectory = Path.Combine(testRootDirectory, "v4_3_0");
         var revertedDirectory = Path.Combine(testRootDirectory, "reverted");
+        var workspaceRoot = Path.Combine(testRootDirectory, "workspace");
+        var workspaceWorkingDirectory = Path.Combine(workspaceRoot, "bin", "Debug", "net8.0");
+        var previousCurrentDirectory = Environment.CurrentDirectory;
 
         Directory.CreateDirectory(originalDirectory);
         Directory.CreateDirectory(modifiedDirectory);
+        Directory.CreateDirectory(workspaceWorkingDirectory);
 
         try
         {
-            await WriteVersionedFixtures("v4.0.17", originalDirectory);
-            await WriteVersionedFixtures("v4.3.0", modifiedDirectory);
+            var repositoryRoot = GetRepositoryRoot();
+            CopyProgramInputs(repositoryRoot, workspaceRoot);
+
+            Environment.CurrentDirectory = workspaceWorkingDirectory;
+
+            await GenerateVersionOutputs("4.0.17", originalDirectory);
+            await GenerateVersionOutputs("4.3.0", modifiedDirectory);
 
             await V4Diff.Generate(originalDirectory, modifiedDirectory);
             await V4Diff.Revert(modifiedDirectory, Path.Combine(modifiedDirectory, "diff"), revertedDirectory, originalDirectory);
@@ -76,6 +88,8 @@ public class V4DiffRevertTests
         }
         finally
         {
+            Environment.CurrentDirectory = previousCurrentDirectory;
+
             if (Directory.Exists(testRootDirectory))
             {
                 Directory.Delete(testRootDirectory, true);
@@ -145,135 +159,66 @@ public class V4DiffRevertTests
         await WriteJson(Path.Combine(v2, "variantorder.json"), JsonNode.Parse("""["focus","sm","print"]""")!);
     }
 
-    private static async Task WriteVersionedFixtures(string versionTag, string outputDirectory)
+    private static async Task GenerateVersionOutputs(string version, string outputDirectory)
     {
-        var snapshot = await DownloadIntellisenseSnapshot(versionTag);
-        var classes = ParseClassList(snapshot);
-        var variants = ParseVariantNames(snapshot);
+        await InstallTailwindVersion(version);
 
-        var classVariants = classes
-            .Take(200)
-            .Select(c => new JsonObject
+        var versionTag = $"v{version}";
+        await V4.GenerateClassesFromV3(versionTag);
+        await V4.CompileClasses();
+        await V4.ExtractClassesAndDescriptions(false);
+        await V4.ExtractDefaultTheme();
+        await V4.ExtractVariants(versionTag);
+        await V4.GetSortOrder();
+        await V4.GetVariantSortOrder();
+
+        Directory.CreateDirectory(outputDirectory);
+        foreach (var file in V4Diff.DiffableFiles)
+        {
+            File.Copy(Path.Combine(Helpers.V4Folder, file), Path.Combine(outputDirectory, file), true);
+        }
+    }
+
+    private static async Task InstallTailwindVersion(string version)
+    {
+        using var process = new Process();
+        process.StartInfo = new ProcessStartInfo("cmd")
+        {
+            WorkingDirectory = Helpers.BaseFolder,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            Arguments = $"/c npm install @tailwindcss/cli@{version} tailwindcss@{version}"
+        };
+
+        process.Start();
+        var stdout = await process.StandardOutput.ReadToEndAsync();
+        var stderr = await process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync();
+
+        Assert.True(process.ExitCode == 0, $"npm install failed for {version}.{Environment.NewLine}{stdout}{Environment.NewLine}{stderr}");
+    }
+
+    private static void CopyProgramInputs(string repositoryRoot, string workspaceRoot)
+    {
+        File.Copy(Path.Combine(repositoryRoot, "tailwindclasses-base.json"), Path.Combine(workspaceRoot, "tailwindclasses-base.json"), true);
+        File.Copy(Path.Combine(repositoryRoot, "v4-variants.txt"), Path.Combine(workspaceRoot, "v4-variants.txt"), true);
+    }
+
+    private static string GetRepositoryRoot()
+    {
+        var current = new DirectoryInfo(AppContext.BaseDirectory);
+
+        while (current is not null)
+        {
+            if (File.Exists(Path.Combine(current.FullName, "AllTailwindClassesGenerator.sln")))
             {
-                ["s"] = c
-            })
-            .ToArray();
+                return current.FullName;
+            }
 
-        JsonArray classesJson = [];
-        foreach (var item in classVariants)
-        {
-            classesJson.Add(item);
+            current = current.Parent;
         }
 
-        var colors = new JsonObject
-        {
-            ["black"] = "rgb(0 0 0 / 1)",
-            ["seed"] = classes.FirstOrDefault() ?? "none",
-            ["count"] = classes.Count.ToString()
-        };
-
-        var descriptions = new JsonObject
-        {
-            ["sample"] = string.Join(' ', classes.Take(8)),
-            ["version"] = versionTag
-        };
-
-        var theme = new JsonObject
-        {
-            ["--spacing"] = classes.Count.ToString(),
-            ["--radius"] = variants.Count.ToString()
-        };
-
-        JsonObject variantsJson = [];
-        foreach (var variant in variants.Take(200))
-        {
-            variantsJson[variant] = variant;
-        }
-
-        JsonArray order = [];
-        foreach (var name in classes.Take(300))
-        {
-            order.Add(name);
-        }
-
-        JsonArray variantOrder = [];
-        foreach (var name in variants.Take(300))
-        {
-            variantOrder.Add(name);
-        }
-
-        await WriteJson(Path.Combine(outputDirectory, "classes.json"), classesJson);
-        await WriteJson(Path.Combine(outputDirectory, "colors.json"), colors);
-        await WriteJson(Path.Combine(outputDirectory, "descriptions.json"), descriptions);
-        await WriteJson(Path.Combine(outputDirectory, "theme.json"), theme);
-        await WriteJson(Path.Combine(outputDirectory, "variants.json"), variantsJson);
-        await WriteJson(Path.Combine(outputDirectory, "order.json"), order);
-        await WriteJson(Path.Combine(outputDirectory, "variantorder.json"), variantOrder);
-    }
-
-    private static async Task<string> DownloadIntellisenseSnapshot(string versionTag)
-    {
-        using var response = await HttpClient.GetAsync($"https://raw.githubusercontent.com/tailwindlabs/tailwindcss/{versionTag}/packages/tailwindcss/src/__snapshots__/intellisense.test.ts.snap");
-        response.EnsureSuccessStatusCode();
-        return await response.Content.ReadAsStringAsync();
-    }
-
-    private static List<string> ParseClassList(string snapshot)
-    {
-        var section = ExtractSnapshotSection(snapshot, "getClassList");
-        if (section is null)
-        {
-            return [];
-        }
-
-        // Tailwind snapshots are JS-like and can include trailing commas in arrays;
-        // normalize to strict JSON before deserializing.
-        var normalized = Regex.Replace(section, @",\s*\]", "]");
-        return JsonSerializer.Deserialize<List<string>>(normalized) ?? [];
-    }
-
-    private static List<string> ParseVariantNames(string snapshot)
-    {
-        var section = ExtractSnapshotSection(snapshot, "getVariants");
-        if (section is null)
-        {
-            return [];
-        }
-
-        HashSet<string> variants = [];
-
-        foreach (Match match in Regex.Matches(section, "\"name\"\\s*:\\s*\"(?<name>[^\"]+)\""))
-        {
-            variants.Add(match.Groups["name"].Value.Trim());
-        }
-
-        return [.. variants];
-    }
-
-    private static string? ExtractSnapshotSection(string snapshot, string sectionName)
-    {
-        var marker = $"exports[`{sectionName} 1`] = `";
-        var markerIndex = snapshot.IndexOf(marker, StringComparison.Ordinal);
-
-        if (markerIndex < 0)
-        {
-            return null;
-        }
-
-        var start = snapshot.IndexOf('\n', markerIndex);
-        if (start < 0)
-        {
-            return null;
-        }
-
-        start++;
-        var end = snapshot.IndexOf("\n`", start, StringComparison.Ordinal);
-        if (end < 0)
-        {
-            return null;
-        }
-
-        return snapshot[start..end].Trim();
+        throw new DirectoryNotFoundException("Unable to locate repository root.");
     }
 
     private static async Task WriteJson(string path, JsonNode node)
