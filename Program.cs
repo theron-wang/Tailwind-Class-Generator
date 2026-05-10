@@ -1,5 +1,6 @@
 ﻿using AllTailwindClassesGenerator;
 using System.Diagnostics;
+using System.Text.RegularExpressions;
 
 Console.WriteLine("Tailwind Class Generator");
 Console.WriteLine();
@@ -233,7 +234,7 @@ static string NormalizeRequestedVersion(string? version)
         return "latest";
     }
 
-    if (!int.TryParse(version.Replace(".", ""), out _))
+    if (!IsValidVersion(version))
     {
         Console.WriteLine("Invalid version. Using latest");
         Console.WriteLine();
@@ -253,7 +254,7 @@ static string? NormalizeOptionalVersion(string? version)
         return null;
     }
 
-    if (!int.TryParse(version.Replace(".", ""), out _))
+    if (!IsValidVersion(version))
     {
         Console.WriteLine("Invalid version. Skipping diff generation");
         Console.WriteLine();
@@ -262,6 +263,11 @@ static string? NormalizeOptionalVersion(string? version)
     }
 
     return version;
+}
+
+static bool IsValidVersion(string version)
+{
+    return Regex.IsMatch(version, @"^\d+\.\d+\.\d+$");
 }
 
 static async Task InstallVersion(string version)

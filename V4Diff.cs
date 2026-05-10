@@ -5,6 +5,11 @@ namespace AllTailwindClassesGenerator;
 
 internal static class V4Diff
 {
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        WriteIndented = true
+    };
+
     public static readonly string[] DiffableFiles =
     [
         "classes.json",
@@ -283,6 +288,6 @@ internal static class V4Diff
     private static async Task WriteJson(string path, JsonObject value)
     {
         await using var stream = File.Open(path, FileMode.Create, FileAccess.Write, FileShare.Read);
-        await JsonSerializer.SerializeAsync(stream, value);
+        await JsonSerializer.SerializeAsync(stream, value, JsonOptions);
     }
 }
