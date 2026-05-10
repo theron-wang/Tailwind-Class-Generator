@@ -275,7 +275,7 @@ internal static class V4Diff
         {
             if (!seen.Add(value))
             {
-                throw new InvalidDataException($"{path} must not contain duplicate entries.");
+                throw new InvalidDataException($"{path} must not contain duplicate entries. Found duplicate: {value}");
             }
         }
     }
