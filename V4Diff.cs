@@ -190,6 +190,7 @@ internal static class V4Diff
     {
         if (!string.IsNullOrWhiteSpace(originalPath) && File.Exists(originalPath))
         {
+            // Restoring from the actual original order file is exact and avoids lossy reconstruction.
             var original = await ReadStringArray(originalPath);
             await WriteStringArray(outputPath, original);
             return;

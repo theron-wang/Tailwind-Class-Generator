@@ -1307,7 +1307,9 @@ internal class V4
 
     private static void AddSyntheticClassEntries(List<string> classes, string line)
     {
-        // Keep these representative values to preserve existing placeholder inference:
+        // Keep these representative values to preserve existing placeholder inference in class metadata:
+        // these canonical examples let extraction detect spacing/numeric/color/percent/fraction patterns
+        // and convert them back to placeholder tokens (e.g. {s}, {n}, {c}, {%}, {f}).
         // spacing (px), numbers (33), colors (black), percentages (51%), fractions (2/7).
         classes.Add(line);
         classes.Add($"-{line}");

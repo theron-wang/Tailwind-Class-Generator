@@ -226,6 +226,8 @@ public class V4DiffRevertTests
             return [];
         }
 
+        // Tailwind snapshots are JS-like and can include trailing commas in arrays;
+        // normalize to strict JSON before deserializing.
         var normalized = Regex.Replace(section, @",\s*\]", "]");
         return JsonSerializer.Deserialize<List<string>>(normalized) ?? [];
     }
