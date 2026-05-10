@@ -1,5 +1,6 @@
 ﻿using AllTailwindClassesGenerator;
 using System.Diagnostics;
+using System.Text.RegularExpressions;
 
 Console.WriteLine("Tailwind Class Generator");
 Console.WriteLine();
@@ -17,23 +18,16 @@ try
     // Note: last Tailwind v4.1 is v4.1.18
     Console.Write("What version (enter for latest, or in format x.x.x): ");
 
-    var version = Console.ReadLine()?.Trim();
+    var version = NormalizeRequestedVersion(Console.ReadLine());
 
     Console.WriteLine();
 
-    if (string.IsNullOrWhiteSpace(version))
+    string? diffVersion = null;
+
+    if (version == "latest")
     {
         Console.WriteLine("Using latest version");
         Console.WriteLine();
-
-        version = "latest";
-    }
-    else if (!int.TryParse(version.Replace(".", ""), out _))
-    {
-        Console.WriteLine("Invalid version. Using latest");
-        Console.WriteLine();
-
-        version = "latest";
     }
 
     Console.Write("Minify (enter for no, or any character for yes): ");
@@ -52,33 +46,77 @@ try
     Console.WriteLine($"Minify: {minifyBool}");
     Console.WriteLine();
 
-    var process = new Process();
-    Console.WriteLine("Updating");
-    process.StartInfo = new ProcessStartInfo("cmd")
-    {
-        WorkingDirectory = Helpers.BaseFolder,
-        RedirectStandardOutput = true,
-        Arguments = $"/c npm install {(version.StartsWith('3') ? "" : $"@tailwindcss/cli@{version}")} tailwindcss@{version}"
-    };
-
-    process.Start();
-    await process.WaitForExitAsync();
-
-    Console.WriteLine($"Version: {version}");
-    Console.WriteLine();
-
     if (version.StartsWith('3'))
     {
+        Console.WriteLine("Updating");
+        await InstallVersion(version);
+
+        Console.WriteLine($"Version: {version}");
+        Console.WriteLine();
+
         await UseV3();
     }
     else
     {
-        await UseV4(minifyBool);
+        Console.Write("Diff against which V4 version (enter to skip, or in format x.x.x): ");
+
+        diffVersion = NormalizeOptionalVersion(Console.ReadLine());
+
+        Console.WriteLine();
+
+        if (diffVersion is null)
+        {
+            Console.WriteLine("Updating");
+            await InstallVersion(version);
+
+            Console.WriteLine($"Version: {version}");
+            Console.WriteLine();
+
+            await UseV4(minifyBool);
+        }
+        else
+        {
+            var tempRoot = Path.Combine(Path.GetTempPath(), "tailwind-class-generator");
+            Directory.CreateDirectory(tempRoot);
+
+            var diffSourceFolder = Path.Combine(tempRoot, $"v4-diff-{Guid.NewGuid():N}"[..20]);
+
+            try
+            {
+                Console.WriteLine("Updating");
+                await InstallVersion(diffVersion);
+
+                Console.WriteLine($"Base Version: {diffVersion}");
+                Console.WriteLine();
+
+                await UseV4(minifyBool);
+
+                CopyV4Outputs(diffSourceFolder);
+
+                Console.WriteLine("Updating");
+                await InstallVersion(version);
+
+                Console.WriteLine($"Version: {version}");
+                Console.WriteLine();
+
+                await UseV4(minifyBool);
+
+                Console.WriteLine("Generating diff");
+                await V4Diff.Generate(diffSourceFolder, Helpers.V4Folder);
+            }
+            finally
+            {
+                if (Directory.Exists(diffSourceFolder))
+                {
+                    Directory.Delete(diffSourceFolder, true);
+                }
+            }
+        }
     }
 }
 catch (Exception e)
 {
-    Console.WriteLine($"Error: " + e.Message);
+    Console.WriteLine($"Error: {e.Message}");
     Console.WriteLine("Terminating program.");
     throw;
 }
@@ -185,4 +223,82 @@ async Task UseV4(bool minify)
             File.Delete(Path.Combine(Helpers.V4Folder, "all-variants.txt"));
         }
     }
+}
+
+static string NormalizeRequestedVersion(string? version)
+{
+    version = version?.Trim();
+
+    if (string.IsNullOrWhiteSpace(version))
+    {
+        return "latest";
+    }
+
+    if (!IsValidVersion(version))
+    {
+        Console.WriteLine("Invalid version. Using latest");
+        Console.WriteLine();
+
+        return "latest";
+    }
+
+    return version;
+}
+
+static string? NormalizeOptionalVersion(string? version)
+{
+    version = version?.Trim();
+
+    if (string.IsNullOrWhiteSpace(version))
+    {
+        return null;
+    }
+
+    if (!IsValidVersion(version))
+    {
+        Console.WriteLine("Invalid version. Skipping diff generation");
+        Console.WriteLine();
+
+        return null;
+    }
+
+    return version;
+}
+
+static bool IsValidVersion(string version)
+{
+    return VersionValidator.Pattern().IsMatch(version);
+}
+
+static async Task InstallVersion(string version)
+{
+    using var process = new Process();
+    process.StartInfo = new ProcessStartInfo("cmd")
+    {
+        WorkingDirectory = Helpers.BaseFolder,
+        RedirectStandardOutput = true,
+        Arguments = $"/c npm install {(version.StartsWith('3') ? "" : $"@tailwindcss/cli@{version}")} tailwindcss@{version}"
+    };
+
+    process.Start();
+    await process.WaitForExitAsync();
+}
+
+static void CopyV4Outputs(string destinationFolder)
+{
+    Directory.CreateDirectory(destinationFolder);
+
+    foreach (var outputFile in V4Diff.DiffableFiles)
+    {
+        var sourcePath = Path.Combine(Helpers.V4Folder, outputFile);
+        var destinationPath = Path.Combine(destinationFolder, outputFile);
+
+        File.Copy(sourcePath, destinationPath, true);
+    }
+}
+
+static partial class VersionValidator
+{
+    [GeneratedRegex(@"^\d+\.\d+\.\d+$")]
+    public static partial Regex Pattern();
 }
