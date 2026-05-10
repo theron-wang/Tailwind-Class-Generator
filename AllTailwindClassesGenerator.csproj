@@ -7,6 +7,12 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>AllTailwindClassesGenerator.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
   <ProjectExtensions><VisualStudio><UserProperties v4_4diff_4theme_1json__JsonSchema="" /></VisualStudio></ProjectExtensions>
 
 </Project>

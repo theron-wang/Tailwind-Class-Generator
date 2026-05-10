@@ -173,13 +173,15 @@ async Task UseV4(bool minify)
 {
     try
     {
+        var installedVersionTag = await GetInstalledTailwindVersionTag();
+
         if (!Directory.Exists(Helpers.V4Folder))
         {
             Directory.CreateDirectory(Helpers.V4Folder);
         }
 
         Console.WriteLine("Getting all classes");
-        await V4.GenerateClassesFromV3();
+        await V4.GenerateClassesFromV3(installedVersionTag);
 
         Console.WriteLine("Building classes");
         await V4.CompileClasses();
@@ -191,7 +193,7 @@ async Task UseV4(bool minify)
         await V4.ExtractDefaultTheme();
 
         Console.WriteLine("Extracting variants");
-        await V4.ExtractVariants();
+        await V4.ExtractVariants(installedVersionTag);
 
         Console.WriteLine("Getting class sort order");
         await V4.GetSortOrder();
@@ -224,6 +226,30 @@ async Task UseV4(bool minify)
             File.Delete(Path.Combine(Helpers.V4Folder, "all-variants.txt"));
         }
     }
+}
+
+static async Task<string> GetInstalledTailwindVersionTag()
+{
+    var processInfo = new ProcessStartInfo("cmd")
+    {
+        WorkingDirectory = Helpers.BaseFolder,
+        RedirectStandardOutput = true,
+        RedirectStandardError = true,
+        Arguments = "/C npm list tailwindcss --depth=0"
+    };
+
+    using var process = Process.Start(processInfo);
+    var output = await process!.StandardOutput.ReadToEndAsync();
+    await process.WaitForExitAsync();
+
+    var match = Regex.Match(output, @"tailwindcss@(?<version>\d+\.\d+\.\d+)");
+
+    if (!match.Success)
+    {
+        throw new InvalidOperationException("Unable to determine installed tailwindcss version.");
+    }
+
+    return $"v{match.Groups["version"].Value}";
 }
 
 static string NormalizeRequestedVersion(string? version)

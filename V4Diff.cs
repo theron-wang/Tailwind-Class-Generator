@@ -36,6 +36,173 @@ internal static class V4Diff
         await GenerateOrderDiff(Path.Combine(v1Folder, "variantorder.json"), Path.Combine(v2Folder, "variantorder.json"), Path.Combine(diffFolder, "variantorder.json"));
     }
 
+    public static async Task Revert(string currentFolder, string diffFolder, string outputFolder)
+    {
+        if (!Directory.Exists(currentFolder))
+        {
+            throw new DirectoryNotFoundException($"Current folder not found: {currentFolder}");
+        }
+
+        if (!Directory.Exists(diffFolder))
+        {
+            throw new DirectoryNotFoundException($"Diff folder not found: {diffFolder}");
+        }
+
+        Directory.CreateDirectory(outputFolder);
+
+        foreach (var file in DiffableFiles)
+        {
+            var currentPath = Path.Combine(currentFolder, file);
+            var diffPath = Path.Combine(diffFolder, file);
+            var outputPath = Path.Combine(outputFolder, file);
+
+            if (!File.Exists(diffPath))
+            {
+                File.Copy(currentPath, outputPath, true);
+                continue;
+            }
+
+            if (file == "classes.json")
+            {
+                await RevertKeyedArrayDiff(currentPath, diffPath, outputPath, "s");
+            }
+            else if (file == "order.json" || file == "variantorder.json")
+            {
+                await RevertOrderDiff(currentPath, diffPath, outputPath);
+            }
+            else
+            {
+                await RevertObjectDiff(currentPath, diffPath, outputPath);
+            }
+        }
+    }
+
+    private static async Task RevertObjectDiff(string currentPath, string diffPath, string outputPath)
+    {
+        var current = await ReadObject(currentPath);
+        var diff = await ReadObject(diffPath);
+
+        var result = (JsonObject)current.DeepClone();
+        var add = diff["add"] as JsonObject ?? [];
+        var remove = diff["remove"] as JsonObject ?? [];
+        var overrideOriginal = diff["overrideOriginal"] as JsonObject;
+
+        foreach (var pair in add)
+        {
+            result.Remove(pair.Key);
+        }
+
+        foreach (var pair in remove)
+        {
+            result[pair.Key] = pair.Value?.DeepClone();
+        }
+
+        if (overrideOriginal is not null)
+        {
+            foreach (var pair in overrideOriginal)
+            {
+                result[pair.Key] = pair.Value?.DeepClone();
+            }
+        }
+
+        await WriteJson(outputPath, result);
+    }
+
+    private static async Task RevertKeyedArrayDiff(string currentPath, string diffPath, string outputPath, string keyProperty)
+    {
+        var current = await ReadArray(currentPath);
+        var diff = await ReadObject(diffPath);
+
+        var currentByKey = ToKeyedDictionary(current, keyProperty);
+
+        var add = diff["add"] as JsonArray ?? [];
+        var remove = diff["remove"] as JsonArray ?? [];
+        var overrideOriginal = diff["overrideOriginal"] as JsonArray;
+
+        foreach (var node in add)
+        {
+            if (node is not JsonObject obj)
+            {
+                continue;
+            }
+
+            var key = obj[keyProperty]?.GetValue<string>();
+            if (!string.IsNullOrWhiteSpace(key))
+            {
+                currentByKey.Remove(key);
+            }
+        }
+
+        foreach (var node in remove)
+        {
+            if (node is not JsonObject obj)
+            {
+                continue;
+            }
+
+            var key = obj[keyProperty]?.GetValue<string>();
+            if (!string.IsNullOrWhiteSpace(key))
+            {
+                currentByKey[key] = (JsonObject)obj.DeepClone();
+            }
+        }
+
+        if (overrideOriginal is not null)
+        {
+            foreach (var node in overrideOriginal)
+            {
+                if (node is not JsonObject obj)
+                {
+                    continue;
+                }
+
+                var key = obj[keyProperty]?.GetValue<string>();
+                if (!string.IsNullOrWhiteSpace(key))
+                {
+                    currentByKey[key] = (JsonObject)obj.DeepClone();
+                }
+            }
+        }
+
+        JsonArray reverted = [];
+        foreach (var (_, value) in currentByKey.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        {
+            reverted.Add(value);
+        }
+
+        await WriteJsonArray(outputPath, reverted);
+    }
+
+    private static async Task RevertOrderDiff(string currentPath, string diffPath, string outputPath)
+    {
+        var current = await ReadStringArray(currentPath);
+        var diff = await ReadObject(diffPath);
+
+        var additions = diff["add"] as JsonArray ?? [];
+        var removeAt = diff["removeAt"] as JsonArray ?? [];
+
+        var addedItems = additions
+            .OfType<JsonObject>()
+            .SelectMany(obj => obj.Select(pair => pair.Key))
+            .ToHashSet();
+
+        var result = current.Where(item => !addedItems.Contains(item)).ToList();
+
+        var removedWithPositions = removeAt
+            .OfType<JsonObject>()
+            .SelectMany(obj => obj.Select(pair => (item: pair.Key, index: pair.Value?.GetValue<int>() ?? 0)))
+            .OrderBy(x => x.index)
+            .ToList();
+
+        foreach (var (item, index) in removedWithPositions)
+        {
+            var safeIndex = Math.Clamp(index, 0, result.Count);
+            result.Insert(safeIndex, item);
+        }
+
+        await WriteStringArray(outputPath, result);
+    }
+
     private static async Task GenerateObjectDiff(string v1Path, string v2Path, string outputPath)
     {
         var v1 = await ReadObject(v1Path);
@@ -44,6 +211,7 @@ internal static class V4Diff
         JsonObject add = [];
         JsonObject remove = [];
         JsonObject @override = [];
+        JsonObject overrideOriginal = [];
 
         foreach (var pair in v2)
         {
@@ -55,6 +223,7 @@ internal static class V4Diff
 
             if (!JsonNode.DeepEquals(previousValue, pair.Value))
             {
+                overrideOriginal[pair.Key] = previousValue?.DeepClone();
                 @override[pair.Key] = pair.Value?.DeepClone();
             }
         }
@@ -77,7 +246,8 @@ internal static class V4Diff
         {
             ["add"] = add,
             ["remove"] = remove,
-            ["override"] = @override
+            ["override"] = @override,
+            ["overrideOriginal"] = overrideOriginal
         });
     }
 
@@ -92,6 +262,7 @@ internal static class V4Diff
         JsonArray add = [];
         JsonArray remove = [];
         JsonArray @override = [];
+        JsonArray overrideOriginal = [];
 
         foreach (var pair in v2ByKey)
         {
@@ -103,6 +274,7 @@ internal static class V4Diff
 
             if (!JsonNode.DeepEquals(previousValue, pair.Value))
             {
+                overrideOriginal.Add(previousValue.DeepClone());
                 @override.Add(pair.Value.DeepClone());
             }
         }
@@ -125,7 +297,8 @@ internal static class V4Diff
         {
             ["add"] = add,
             ["remove"] = remove,
-            ["override"] = @override
+            ["override"] = @override,
+            ["overrideOriginal"] = overrideOriginal
         });
     }
 
@@ -144,11 +317,16 @@ internal static class V4Diff
         var movedItems = v1.Where(v2Set.Contains).Where(item => !fixedItems.Contains(item)).ToHashSet();
 
         JsonArray remove = [];
+        JsonArray removeAt = [];
         foreach (var item in v1)
         {
             if (!v2Set.Contains(item) || movedItems.Contains(item))
             {
                 remove.Add(item);
+                removeAt.Add(new JsonObject
+                {
+                    [item] = v1.IndexOf(item)
+                });
             }
         }
 
@@ -174,7 +352,8 @@ internal static class V4Diff
         await WriteJson(outputPath, new JsonObject
         {
             ["add"] = add,
-            ["remove"] = remove
+            ["remove"] = remove,
+            ["removeAt"] = removeAt
         });
     }
 
@@ -298,6 +477,18 @@ internal static class V4Diff
     }
 
     private static async Task WriteJson(string path, JsonObject value)
+    {
+        await using var stream = File.Open(path, FileMode.Create, FileAccess.Write, FileShare.Read);
+        await JsonSerializer.SerializeAsync(stream, value);
+    }
+
+    private static async Task WriteJsonArray(string path, JsonArray value)
+    {
+        await using var stream = File.Open(path, FileMode.Create, FileAccess.Write, FileShare.Read);
+        await JsonSerializer.SerializeAsync(stream, value);
+    }
+
+    private static async Task WriteStringArray(string path, List<string> value)
     {
         await using var stream = File.Open(path, FileMode.Create, FileAccess.Write, FileShare.Read);
         await JsonSerializer.SerializeAsync(stream, value);
