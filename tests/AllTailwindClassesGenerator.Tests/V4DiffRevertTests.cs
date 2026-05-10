@@ -186,14 +186,10 @@ public class V4DiffRevertTests
         process.StartInfo = new ProcessStartInfo("cmd")
         {
             WorkingDirectory = Helpers.BaseFolder,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
             Arguments = $"/c npm install @tailwindcss/cli@{version} tailwindcss@{version}"
         };
 
         process.Start();
-        var stdout = await process.StandardOutput.ReadToEndAsync();
-        var stderr = await process.StandardError.ReadToEndAsync();
         await process.WaitForExitAsync();
 
         Assert.Equal(0, process.ExitCode);
