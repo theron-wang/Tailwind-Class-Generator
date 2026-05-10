@@ -7,4 +7,6 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ProjectExtensions><VisualStudio><UserProperties v4_4diff_4theme_1json__JsonSchema="" /></VisualStudio></ProjectExtensions>
+
 </Project>

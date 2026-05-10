@@ -5,11 +5,6 @@ namespace AllTailwindClassesGenerator;
 
 internal static class V4Diff
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented = true
-    };
-
     public static readonly string[] DiffableFiles =
     [
         "classes.json",
@@ -72,6 +67,12 @@ internal static class V4Diff
             }
         }
 
+        if (add.Count == 0 && remove.Count == 0 && @override.Count == 0)
+        {
+            // Avoid creating empty diff files
+            return;
+        }
+
         await WriteJson(outputPath, new JsonObject
         {
             ["add"] = add,
@@ -114,6 +115,12 @@ internal static class V4Diff
             }
         }
 
+        if (add.Count == 0 && remove.Count == 0 && @override.Count == 0)
+        {
+            // Avoid creating empty diff files
+            return;
+        }
+
         await WriteJson(outputPath, new JsonObject
         {
             ["add"] = add,
@@ -153,10 +160,15 @@ internal static class V4Diff
             {
                 add.Add(new JsonObject
                 {
-                    ["value"] = item,
-                    ["index"] = i
+                    [item] = i
                 });
             }
+        }
+
+        if (add.Count == 0 && remove.Count == 0)
+        {
+            // Avoid creating empty diff files
+            return;
         }
 
         await WriteJson(outputPath, new JsonObject
@@ -288,6 +300,6 @@ internal static class V4Diff
     private static async Task WriteJson(string path, JsonObject value)
     {
         await using var stream = File.Open(path, FileMode.Create, FileAccess.Write, FileShare.Read);
-        await JsonSerializer.SerializeAsync(stream, value, JsonOptions);
+        await JsonSerializer.SerializeAsync(stream, value);
     }
 }
