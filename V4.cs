@@ -1,13 +1,14 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 
 namespace AllTailwindClassesGenerator;
 
 internal class V4
 {
-    public static async Task GenerateClassesFromV3()
+    public static async Task GenerateClassesFromV3(string versionTag)
     {
         var baseClasses = Path.Combine(Helpers.BaseFolder, "tailwindclasses-base.json");
 
@@ -106,26 +107,24 @@ internal class V4
             }
         }
 
-        var addedClassesPath = Path.Combine(Helpers.BaseFolder, "v4-added-classes.txt");
-
+        foreach (var addedClass in await LoadClassesFromSnapshot(versionTag))
         {
-            using var fs = new FileStream(addedClassesPath, FileMode.Open, FileAccess.Read, FileShare.Read);
-            using var sr = new StreamReader(fs);
-            while (await sr.ReadLineAsync() is var line && line is not null)
+            var line = addedClass.Trim();
+            if (string.IsNullOrWhiteSpace(line))
             {
-                line = line.Trim();
-                classes.Add(line);
-                // 33, 2/7, 51% are not included anywhere so we know they are added synthetically here
-                classes.Add($"-{line}");
-                classes.Add($"{line}-px");
-                classes.Add($"-{line}-px");
-                classes.Add($"{line}-33");
-                classes.Add($"-{line}-33");
-                classes.Add($"{line}-black");
-                classes.Add($"{line}-51%");
-                classes.Add($"-{line}-51%");
-                classes.Add($"{line}-2/7");
-                classes.Add($"-{line}-2/7");
+                continue;
+            }
+
+            AddSyntheticClassEntries(classes, line);
+
+            var lastDash = line.LastIndexOf('-');
+            if (lastDash > 0)
+            {
+                var stem = line[..lastDash];
+                if (!string.IsNullOrWhiteSpace(stem))
+                {
+                    AddSyntheticClassEntries(classes, stem);
+                }
             }
         }
 
@@ -780,52 +779,45 @@ internal class V4
         await JsonSerializer.SerializeAsync(themeOutput, theme);
     }
 
-    public static async Task ExtractVariants()
+    public static async Task ExtractVariants(string versionTag)
     {
-        var variantsPath = Path.Combine(Helpers.BaseFolder, "v4-variants.txt");
-
-        using (var fs = new FileStream(variantsPath, FileMode.Open, FileAccess.Read, FileShare.Read))
+        var variants = await LoadVariantsFromSnapshot(versionTag);
+        if (variants.Count == 0)
         {
-            using var output = File.Open(Path.Combine(Helpers.V4Folder, "all-variants.txt"), FileMode.Create, FileAccess.Write);
-            using var sr = new StreamReader(fs);
-            using var sw = new StreamWriter(output);
+            variants = await LoadVariantsFromFile();
+        }
 
-            string[] multipliers = ["not-", "has-", "in-", "group-", "peer-"];
+        using var output = File.Open(Path.Combine(Helpers.V4Folder, "all-variants.txt"), FileMode.Create, FileAccess.Write);
+        using var sw = new StreamWriter(output);
 
-            while (sr.EndOfStream == false)
+        string[] multipliers = ["not-", "has-", "in-", "group-", "peer-"];
+
+        foreach (var variant in variants)
+        {
+            var normalized = variant.Replace("...", "div");
+
+            await sw.WriteLineAsync($"{normalized}:p-px");
+
+            // @min-{c} missing from docs
+            if (normalized.Contains("max"))
             {
-                var line = (await sr.ReadLineAsync())?.Trim();
+                await sw.WriteLineAsync($"{normalized.Replace("max", "min")}:p-px");
+            }
 
-                if (string.IsNullOrEmpty(line) || line.StartsWith('#'))
+            if (!multipliers.Any(normalized.StartsWith))
+            {
+                foreach (var m in multipliers)
                 {
-                    continue;
-                }
-
-                var parts = line.Replace("...", "div").Split('\t');
-
-                await sw.WriteLineAsync($"{parts[0]}:p-px");
-
-                // @min-{c} missing from docs
-                if (parts[0].Contains("max"))
-                {
-                    await sw.WriteLineAsync($"{parts[0].Replace("max", "min")}:p-px");
-                }
-
-                if (!multipliers.Any(parts[0].StartsWith))
-                {
-                    foreach (var m in multipliers)
-                    {
-                        await sw.WriteLineAsync($"{m}{parts[0]}:p-px");
-                    }
+                    await sw.WriteLineAsync($"{m}{normalized}:p-px");
                 }
             }
         }
 
         using (var fs = new FileStream(Path.Combine(Helpers.BaseFolder, "v4.css"), FileMode.Create, FileAccess.Write, FileShare.ReadWrite))
         {
-            using var sw = new StreamWriter(fs);
-            await sw.WriteLineAsync("@import \"tailwindcss\" source(none);");
-            await sw.WriteLineAsync("@source \"./v4/all-variants.txt\";");
+            using var cssFileWriter = new StreamWriter(fs);
+            await cssFileWriter.WriteLineAsync("@import \"tailwindcss\" source(none);");
+            await cssFileWriter.WriteLineAsync("@source \"./v4/all-variants.txt\";");
         }
 
         var processInfo = new ProcessStartInfo("cmd")
@@ -1154,6 +1146,153 @@ internal class V4
         await JsonSerializer.SerializeAsync(cssDescOutput, descriptions);
     }
 
+    private static async Task<List<string>> LoadClassesFromSnapshot(string versionTag)
+    {
+        var snapshot = await DownloadIntellisenseSnapshot(versionTag);
+        var section = ExtractSnapshotSection(snapshot, "getClassList");
+
+        if (string.IsNullOrWhiteSpace(section))
+        {
+            return [];
+        }
+
+        var normalized = Regex.Replace(section, @",\s*\]", "]");
+        var classes = JsonSerializer.Deserialize<List<string>>(normalized) ?? [];
+
+        // Some classes include slash-delimited suffixes (e.g. color spaces or interpolation names) that are
+        // not numeric fractions; keep only entries whose final segment is a numeric fraction (x/y).
+        classes.RemoveAll(c =>
+        {
+            if (!c.Contains('/'))
+            {
+                return false;
+            }
+
+            var last = c.Split('-').Last();
+            var split = last.Split('/');
+
+            return split.Length != 2 || split.Any(part => !int.TryParse(part, out _));
+        });
+
+        return classes;
+    }
+
+    private static async Task<List<string>> LoadVariantsFromSnapshot(string versionTag)
+    {
+        var snapshot = await DownloadIntellisenseSnapshot(versionTag);
+        var section = ExtractSnapshotSection(snapshot, "getVariants");
+
+        if (string.IsNullOrWhiteSpace(section))
+        {
+            return [];
+        }
+
+        HashSet<string> variants = [];
+
+        foreach (Match match in Regex.Matches(section, "\"name\"\\s*:\\s*\"(?<name>[^\"]+)\""))
+        {
+            var rawName = match.Groups["name"].Value.Trim();
+            if (string.IsNullOrWhiteSpace(rawName))
+            {
+                continue;
+            }
+
+            variants.Add(MapVariantName(rawName));
+        }
+
+        return [.. variants];
+    }
+
+    private static async Task<List<string>> LoadVariantsFromFile()
+    {
+        var variantsPath = Path.Combine(Helpers.BaseFolder, "v4-variants.txt");
+        List<string> variants = [];
+
+        using var fs = new FileStream(variantsPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        using var sr = new StreamReader(fs);
+
+        while (sr.EndOfStream == false)
+        {
+            var line = (await sr.ReadLineAsync())?.Trim();
+
+            if (string.IsNullOrEmpty(line) || line.StartsWith('#'))
+            {
+                continue;
+            }
+
+            var parts = line.Split('\t');
+            variants.Add(parts[0]);
+        }
+
+        return variants;
+    }
+
+    private static string MapVariantName(string name)
+    {
+        return name switch
+        {
+            "not" => "not-[...]",
+            "has" => "has-[...]",
+            "in" => "in-[...]",
+            "group" => "group-[...]",
+            "peer" => "peer-[...]",
+            "aria" => "aria-[...]",
+            "data" => "data-[...]",
+            "nth" => "nth-[...]",
+            "nth-last" => "nth-last-[...]",
+            "nth-of-type" => "nth-of-type-[...]",
+            "nth-last-of-type" => "nth-last-of-type-[...]",
+            "supports" => "supports-[...]",
+            "min" => "min-[...]",
+            "max" => "max-[...]",
+            "@" => "@[...]",
+            "@min" => "@min-[...]",
+            "@max" => "@max-[...]",
+            _ => name
+        };
+    }
+
+    private static string? ExtractSnapshotSection(string snapshot, string sectionName)
+    {
+        var marker = $"exports[`{sectionName} 1`] = `";
+        var markerStart = snapshot.IndexOf(marker, StringComparison.Ordinal);
+
+        if (markerStart < 0)
+        {
+            return null;
+        }
+
+        var contentStart = snapshot.IndexOf('\n', markerStart);
+        if (contentStart < 0)
+        {
+            return null;
+        }
+
+        contentStart++;
+
+        var contentEnd = snapshot.IndexOf("\n`", contentStart, StringComparison.Ordinal);
+        if (contentEnd < 0)
+        {
+            return null;
+        }
+
+        return snapshot[contentStart..contentEnd].Trim();
+    }
+
+    private static async Task<string> DownloadIntellisenseSnapshot(string versionTag)
+    {
+        var url = $"https://raw.githubusercontent.com/tailwindlabs/tailwindcss/{versionTag}/packages/tailwindcss/src/__snapshots__/intellisense.test.ts.snap";
+
+        using var http = new HttpClient();
+        using var response = await http.GetAsync(url);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new HttpRequestException($"Failed to download Tailwind intellisense snapshot for {versionTag} from {url}. Status code: {response.StatusCode}");
+        }
+
+        return await response.Content.ReadAsStringAsync();
+    }
+
     private static async Task WriteAllClasses(List<string> classes)
     {
         var outputPath = Path.Combine(Helpers.V4Folder, "all-classes.txt");
@@ -1164,6 +1303,25 @@ internal class V4
         {
             await sw.WriteLineAsync(c);
         }
+    }
+
+    private static void AddSyntheticClassEntries(List<string> classes, string line)
+    {
+        // Keep these representative values to preserve existing placeholder inference in class metadata:
+        // these canonical examples let extraction detect spacing/numeric/color/percent/fraction patterns
+        // and convert them back to placeholder tokens (e.g. {s}, {n}, {c}, {%}, {f}).
+        // spacing (px), numbers (33), colors (black), percentages (51%), fractions (2/7).
+        classes.Add(line);
+        classes.Add($"-{line}");
+        classes.Add($"{line}-px");
+        classes.Add($"-{line}-px");
+        classes.Add($"{line}-33");
+        classes.Add($"-{line}-33");
+        classes.Add($"{line}-black");
+        classes.Add($"{line}-51%");
+        classes.Add($"-{line}-51%");
+        classes.Add($"{line}-2/7");
+        classes.Add($"-{line}-2/7");
     }
 
     private static async Task<HashSet<string>> GetClassesFromCssFile(string outputPath)
