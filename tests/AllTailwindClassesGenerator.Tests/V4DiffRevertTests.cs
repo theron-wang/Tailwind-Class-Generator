@@ -19,7 +19,7 @@ public class V4DiffRevertTests
 
         try
         {
-            await WriteFixtures(originalDirectory, modifiedDirectory);
+            await WriteFixturesForRestorationTest(originalDirectory, modifiedDirectory);
 
             await V4Diff.Generate(originalDirectory, modifiedDirectory);
             await V4Diff.Revert(originalDirectory, Path.Combine(modifiedDirectory, "diff"), revertedDirectory);
@@ -27,6 +27,44 @@ public class V4DiffRevertTests
             foreach (var file in V4Diff.DiffableFiles)
             {
                 var expected = await ReadJson(Path.Combine(modifiedDirectory, file));
+                var actual = await ReadJson(Path.Combine(revertedDirectory, file));
+
+                Assert.True(
+                    JsonNode.DeepEquals(Normalize(file, expected), Normalize(file, actual)),
+                    $"Mismatch after revert for {file}");
+            }
+        }
+        finally
+        {
+            if (Directory.Exists(testRootDirectory))
+            {
+                Directory.Delete(testRootDirectory, true);
+            }
+        }
+    }
+
+
+    [Fact]
+    public async Task Revert_Works_With_Empty_Diff()
+    {
+        var testRootDirectory = Path.Combine(Path.GetTempPath(), $"v4empty-diff-test-{Guid.NewGuid():N}");
+        var originalDirectory = Path.Combine(testRootDirectory, "v1");
+        var modifiedDirectory = Path.Combine(testRootDirectory, "v2");
+        var revertedDirectory = Path.Combine(testRootDirectory, "reverted");
+
+        Directory.CreateDirectory(originalDirectory);
+        Directory.CreateDirectory(modifiedDirectory);
+
+        try
+        {
+            await WriteFixturesForEmptyTest(originalDirectory);
+            Directory.CreateDirectory(Path.Combine(modifiedDirectory, "diff"));
+
+            await V4Diff.Revert(originalDirectory, Path.Combine(modifiedDirectory, "diff"), revertedDirectory);
+
+            foreach (var file in V4Diff.DiffableFiles)
+            {
+                var expected = await ReadJson(Path.Combine(originalDirectory, file));
                 var actual = await ReadJson(Path.Combine(revertedDirectory, file));
 
                 Assert.True(
@@ -128,7 +166,7 @@ public class V4DiffRevertTests
         return await JsonNode.ParseAsync(stream);
     }
 
-    private static async Task WriteFixtures(string v1, string v2)
+    private static async Task WriteFixturesForRestorationTest(string v1, string v2)
     {
         await WriteJson(Path.Combine(v1, "classes.json"), JsonNode.Parse("""
             [
@@ -160,6 +198,28 @@ public class V4DiffRevertTests
 
         await WriteJson(Path.Combine(v1, "variantorder.json"), JsonNode.Parse("""["sm","hover","focus"]""")!);
         await WriteJson(Path.Combine(v2, "variantorder.json"), JsonNode.Parse("""["focus","sm","print"]""")!);
+    }
+
+    private static async Task WriteFixturesForEmptyTest(string v1)
+    {
+        await WriteJson(Path.Combine(v1, "classes.json"), JsonNode.Parse("""
+            [
+              { "s": "alpha", "dv": ["1"] },
+              { "s": "beta" }
+            ]
+            """)!);
+
+        await WriteJson(Path.Combine(v1, "colors.json"), JsonNode.Parse("""{ "a": "1", "b": "2" }""")!);
+
+        await WriteJson(Path.Combine(v1, "descriptions.json"), JsonNode.Parse("""{ "x": "first", "y": "same" }""")!);
+
+        await WriteJson(Path.Combine(v1, "theme.json"), JsonNode.Parse("""{ "k1": "v1", "k2": "v2" }""")!);
+
+        await WriteJson(Path.Combine(v1, "variants.json"), JsonNode.Parse("""{ "hover": "h", "focus": "f" }""")!);
+
+        await WriteJson(Path.Combine(v1, "order.json"), JsonNode.Parse("""["a","x","b","c"]""")!);
+
+        await WriteJson(Path.Combine(v1, "variantorder.json"), JsonNode.Parse("""["sm","hover","focus"]""")!);
     }
 
     private static async Task GenerateVersionOutputs(string version, string outputDirectory)

@@ -58,7 +58,7 @@ internal static class V4Diff
 
             if (!File.Exists(diffPath))
             {
-                File.Copy(originalFolder, outputPath, true);
+                File.Copy(originalPath, outputPath, true);
                 continue;
             }
 
