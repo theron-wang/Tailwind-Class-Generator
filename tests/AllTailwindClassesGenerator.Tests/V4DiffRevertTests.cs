@@ -22,11 +22,11 @@ public class V4DiffRevertTests
             await WriteFixtures(originalDirectory, modifiedDirectory);
 
             await V4Diff.Generate(originalDirectory, modifiedDirectory);
-            await V4Diff.Revert(modifiedDirectory, Path.Combine(modifiedDirectory, "diff"), revertedDirectory, originalDirectory);
+            await V4Diff.Revert(originalDirectory, Path.Combine(modifiedDirectory, "diff"), revertedDirectory);
 
             foreach (var file in V4Diff.DiffableFiles)
             {
-                var expected = await ReadJson(Path.Combine(originalDirectory, file));
+                var expected = await ReadJson(Path.Combine(modifiedDirectory, file));
                 var actual = await ReadJson(Path.Combine(revertedDirectory, file));
 
                 Assert.True(
@@ -77,11 +77,11 @@ public class V4DiffRevertTests
             await GenerateVersionOutputs("4.3.0", modifiedDirectory);
 
             await V4Diff.Generate(originalDirectory, modifiedDirectory);
-            await V4Diff.Revert(modifiedDirectory, Path.Combine(modifiedDirectory, "diff"), revertedDirectory, originalDirectory);
+            await V4Diff.Revert(originalDirectory, Path.Combine(modifiedDirectory, "diff"), revertedDirectory);
 
             foreach (var file in V4Diff.DiffableFiles)
             {
-                var expected = await ReadJson(Path.Combine(originalDirectory, file));
+                var expected = await ReadJson(Path.Combine(modifiedDirectory, file));
                 var actual = await ReadJson(Path.Combine(revertedDirectory, file));
 
                 Assert.True(
