@@ -79,8 +79,8 @@ internal static class V4Diff
 
     private static async Task RevertObjectDiff(string originalPath, string diffPath, string outputPath)
     {
-        var original = await ReadObject(originalPath);
-        var diff = await ReadObject(diffPath);
+        var original = await LoadJsonAsync<JsonObject>(originalPath);
+        var diff = await LoadJsonAsync<JsonObject>(diffPath);
 
         var result = original;
         var add = diff["add"] as JsonObject ?? [];
@@ -103,8 +103,8 @@ internal static class V4Diff
 
     private static async Task RevertKeyedArrayDiff(string originalPath, string diffPath, string outputPath, string keyProperty)
     {
-        var original = await ReadArray(originalPath);
-        var diff = await ReadObject(diffPath);
+        var original = await LoadJsonAsync<JsonArray>(originalPath);
+        var diff = await LoadJsonAsync<JsonObject>(diffPath);
 
         var originalByKey = ToKeyedDictionary(original, keyProperty);
 
@@ -146,8 +146,8 @@ internal static class V4Diff
 
     private static async Task RevertOrderDiff(string originalPath, string diffPath, string outputPath)
     {
-        var result = await ReadStringArray(originalPath);
-        var diff = await ReadObject(diffPath);
+        var result = await LoadJsonAsync<List<string>>(originalPath);
+        var diff = await LoadJsonAsync<JsonObject>(diffPath);
 
         var additions = diff["add"] as JsonArray ?? [];
         var remove = diff["remove"] as JsonArray ?? [];
@@ -161,8 +161,11 @@ internal static class V4Diff
         {
             // Each toAdd is {"className": index}
             var obj = toAdd!.AsObject();
+            var key = obj.First().Key;
 
-            result.Insert(obj.GetAt(0).Value!.GetValue<int>(), obj.GetAt(0).Key);
+            obj.TryGetPropertyValue(key, out var value);
+
+            result.Insert(value!.GetValue<int>(), key);
         }
 
         await WriteJson(outputPath, result);
@@ -170,8 +173,8 @@ internal static class V4Diff
 
     private static async Task GenerateObjectDiff(string v1Path, string v2Path, string outputPath)
     {
-        var v1 = await ReadObject(v1Path);
-        var v2 = await ReadObject(v2Path);
+        var v1 = await LoadJsonAsync<JsonObject>(v1Path);
+        var v2 = await LoadJsonAsync<JsonObject>(v2Path);
 
         JsonObject add = [];
         JsonObject remove = [];
@@ -230,8 +233,8 @@ internal static class V4Diff
 
     private static async Task GenerateKeyedArrayDiff(string v1Path, string v2Path, string outputPath, string keyProperty)
     {
-        var v1 = await ReadArray(v1Path);
-        var v2 = await ReadArray(v2Path);
+        var v1 = await LoadJsonAsync<JsonArray>(v1Path);
+        var v2 = await LoadJsonAsync<JsonArray>(v2Path);
 
         var v1ByKey = ToKeyedDictionary(v1, keyProperty);
         var v2ByKey = ToKeyedDictionary(v2, keyProperty);
@@ -293,8 +296,8 @@ internal static class V4Diff
 
     private static async Task GenerateOrderDiff(string v1Path, string v2Path, string outputPath)
     {
-        var v1 = await ReadStringArray(v1Path);
-        var v2 = await ReadStringArray(v2Path);
+        var v1 = await LoadJsonAsync<List<string>>(v1Path);
+        var v2 = await LoadJsonAsync<List<string>>(v2Path);
 
         ValidateUnique(v1, v1Path);
         ValidateUnique(v2, v2Path);
@@ -412,25 +415,11 @@ internal static class V4Diff
         return result;
     }
 
-    private static async Task<JsonObject> ReadObject(string path)
+    private static async Task<T> LoadJsonAsync<T>(string path)
     {
         await using var stream = File.OpenRead(path);
-        return (await JsonNode.ParseAsync(stream) as JsonObject)
-            ?? throw new InvalidDataException($"Expected {path} to contain a JSON object.");
-    }
-
-    private static async Task<JsonArray> ReadArray(string path)
-    {
-        await using var stream = File.OpenRead(path);
-        return (await JsonNode.ParseAsync(stream) as JsonArray)
-            ?? throw new InvalidDataException($"Expected {path} to contain a JSON array.");
-    }
-
-    private static async Task<List<string>> ReadStringArray(string path)
-    {
-        await using var stream = File.OpenRead(path);
-        return await JsonSerializer.DeserializeAsync<List<string>>(stream)
-            ?? throw new InvalidDataException($"Expected {path} to contain a JSON string array.");
+        return await JsonSerializer.DeserializeAsync<T>(stream)
+            ?? throw new InvalidDataException($"Expected {path} to contain a JSON {typeof(T).Name}.");
     }
 
     private static Dictionary<string, JsonObject> ToKeyedDictionary(JsonArray array, string keyProperty)
@@ -478,7 +467,7 @@ internal static class V4Diff
 
         if (parent is JsonObject obj)
         {
-            obj.Remove(node.GetPropertyName());
+            obj.Remove(obj.First(pair => pair.Value == node).Key);
         }
         else if (parent is JsonArray array)
         {
