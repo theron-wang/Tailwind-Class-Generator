@@ -419,7 +419,7 @@ internal class V4
                 }
             }
 
-            if (v.Stem.EndsWith("px"))
+            if (v.Stem.EndsWith("px") && v.Stem.Length > 2)
             {
                 v.UseSpacing = true;
                 v.Stem = $"{v.Stem[..^3]}-{{s}}";
@@ -787,28 +787,30 @@ internal class V4
             variants = await LoadVariantsFromFile();
         }
 
-        using var output = File.Open(Path.Combine(Helpers.V4Folder, "all-variants.txt"), FileMode.Create, FileAccess.Write);
-        using var sw = new StreamWriter(output);
-
-        string[] multipliers = ["not-", "has-", "in-", "group-", "peer-"];
-
-        foreach (var variant in variants)
+        using (var output = File.Open(Path.Combine(Helpers.V4Folder, "all-variants.txt"), FileMode.Create, FileAccess.Write))
         {
-            var normalized = variant.Replace("...", "div");
+            using var sw = new StreamWriter(output);
 
-            await sw.WriteLineAsync($"{normalized}:p-px");
+            string[] multipliers = ["not-", "has-", "in-", "group-", "peer-"];
 
-            // @min-{c} missing from docs
-            if (normalized.Contains("max"))
+            foreach (var variant in variants)
             {
-                await sw.WriteLineAsync($"{normalized.Replace("max", "min")}:p-px");
-            }
+                var normalized = variant.Replace("...", "div");
 
-            if (!multipliers.Any(normalized.StartsWith))
-            {
-                foreach (var m in multipliers)
+                await sw.WriteLineAsync($"{normalized}:p-px");
+
+                // @min-{c} missing from docs
+                if (normalized.Contains("max"))
                 {
-                    await sw.WriteLineAsync($"{m}{normalized}:p-px");
+                    await sw.WriteLineAsync($"{normalized.Replace("max", "min")}:p-px");
+                }
+
+                if (!multipliers.Any(normalized.StartsWith))
+                {
+                    foreach (var m in multipliers)
+                    {
+                        await sw.WriteLineAsync($"{m}{normalized}:p-px");
+                    }
                 }
             }
         }

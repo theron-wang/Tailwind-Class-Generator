@@ -159,7 +159,7 @@ internal static class V4Diff
             var key = obj[keyProperty]?.GetValue<string>();
             if (!string.IsNullOrWhiteSpace(key))
             {
-                currentByKey[key] = (JsonObject)obj.DeepClone();
+                currentByKey[key] = obj;
             }
         }
 
@@ -173,14 +173,14 @@ internal static class V4Diff
             var key = obj[keyProperty]?.GetValue<string>();
             if (!string.IsNullOrWhiteSpace(key) && originalByKey.TryGetValue(key, out var originalObj))
             {
-                currentByKey[key] = (JsonObject)originalObj.DeepClone();
+                currentByKey[key] = originalObj;
             }
         }
 
         JsonArray reverted = [];
         foreach (var (_, value) in currentByKey.OrderBy(pair => pair.Key, StringComparer.Ordinal))
         {
-            reverted.Add(value);
+            reverted.Add(value.DeepClone());
         }
 
         await WriteJsonArray(outputPath, reverted);

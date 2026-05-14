@@ -1,6 +1,6 @@
-﻿using System.Text.Json;
+﻿using System.Diagnostics;
+using System.Text.Json;
 using System.Text.Json.Nodes;
-using System.Diagnostics;
 
 namespace AllTailwindClassesGenerator.Tests;
 
@@ -57,12 +57,14 @@ public class V4DiffRevertTests
         var modifiedDirectory = Path.Combine(testRootDirectory, "v4_3_0");
         var revertedDirectory = Path.Combine(testRootDirectory, "reverted");
         var workspaceRoot = Path.Combine(testRootDirectory, "workspace");
-        var workspaceWorkingDirectory = Path.Combine(workspaceRoot, "bin", "Debug", "net8.0");
+        var workspaceWorkingDirectory = Path.Combine(workspaceRoot, "bin", "Debug", "net10.0");
+        var workspacev4Directory = Path.Combine(workspaceRoot, "v4");
         var previousCurrentDirectory = Environment.CurrentDirectory;
 
         Directory.CreateDirectory(originalDirectory);
         Directory.CreateDirectory(modifiedDirectory);
         Directory.CreateDirectory(workspaceWorkingDirectory);
+        Directory.CreateDirectory(workspacev4Directory);
 
         try
         {
