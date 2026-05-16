@@ -19,6 +19,6 @@
     <None Remove="tests/**/*.cs" />
   </ItemGroup>
 
-  <ProjectExtensions><VisualStudio><UserProperties v4_4diff_4theme_1json__JsonSchema="" /></VisualStudio></ProjectExtensions>
+  <ProjectExtensions><VisualStudio><UserProperties /></VisualStudio></ProjectExtensions>
 
 </Project>

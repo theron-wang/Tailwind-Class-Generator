@@ -84,15 +84,14 @@ internal static class V4Diff
 
         var result = original;
         var add = diff["add"] as JsonObject ?? [];
-        var remove = diff["remove"] as JsonObject ?? [];
-        var @override = diff["override"] as JsonObject ?? [];
+        var remove = diff["remove"] as JsonArray ?? [];
 
-        foreach (var pair in remove)
+        foreach (var key in remove)
         {
-            result.Remove(pair.Key);
+            result.Remove(key!.ToString());
         }
 
-        foreach (var pair in add.Concat(@override).ToList())
+        foreach (var pair in add.ToList())
         {
             DetachJsonNode(pair.Value!);
             result[pair.Key] = pair.Value;
@@ -110,23 +109,18 @@ internal static class V4Diff
 
         var add = diff["add"] as JsonArray ?? [];
         var remove = diff["remove"] as JsonArray ?? [];
-        var @override = diff["override"] as JsonArray ?? [];
 
-        foreach (var node in remove)
+        foreach (var key in remove)
         {
-            if (node is not JsonObject obj)
-            {
-                continue;
-            }
+            var keyAsString = key!.ToString();
 
-            var key = obj[keyProperty]?.GetValue<string>();
-            if (!string.IsNullOrWhiteSpace(key))
+            if (!string.IsNullOrWhiteSpace(keyAsString))
             {
-                originalByKey.Remove(key);
+                originalByKey.Remove(keyAsString);
             }
         }
 
-        foreach (var node in add.Concat(@override).ToList())
+        foreach (var node in add.ToList())
         {
             if (node is not JsonObject obj)
             {
@@ -177,31 +171,23 @@ internal static class V4Diff
         var v2 = await LoadJsonAsync<JsonObject>(v2Path);
 
         JsonObject add = [];
-        JsonObject remove = [];
-        JsonObject @override = [];
-
-        foreach (var pair in v2.ToList())
-        {
-            if (!v1.TryGetPropertyValue(pair.Key, out var previousValue))
-            {
-                DetachJsonNode(pair.Value!);
-                add[pair.Key] = pair.Value;
-                continue;
-            }
-
-            if (!JsonNode.DeepEquals(previousValue, pair.Value))
-            {
-                DetachJsonNode(pair.Value!);
-                @override[pair.Key] = pair.Value;
-            }
-        }
+        JsonArray remove = [];
 
         foreach (var pair in v1.ToList())
         {
             if (!v2.ContainsKey(pair.Key))
             {
                 DetachJsonNode(pair.Value!);
-                remove[pair.Key] = pair.Value;
+                remove.Add(pair.Key!);
+            }
+        }
+
+        foreach (var pair in v2.ToList())
+        {
+            if (!v1.TryGetPropertyValue(pair.Key, out var previousValue) || !JsonNode.DeepEquals(previousValue, pair.Value))
+            {
+                DetachJsonNode(pair.Value!);
+                add[pair.Key] = pair.Value;
             }
         }
 
@@ -215,11 +201,6 @@ internal static class V4Diff
         if (remove.Count > 0)
         {
             result["remove"] = remove;
-        }
-
-        if (@override.Count > 0)
-        {
-            result["override"] = @override;
         }
 
         if (result.Count == 0)
@@ -241,30 +222,22 @@ internal static class V4Diff
 
         JsonArray add = [];
         JsonArray remove = [];
-        JsonArray @override = [];
-
-        foreach (var pair in v2ByKey)
-        {
-            if (!v1ByKey.TryGetValue(pair.Key, out var previousValue))
-            {
-                DetachJsonNode(pair.Value);
-                add.Add(pair.Value);
-                continue;
-            }
-
-            if (!JsonNode.DeepEquals(previousValue, pair.Value))
-            {
-                DetachJsonNode(pair.Value);
-                @override.Add(pair.Value);
-            }
-        }
 
         foreach (var pair in v1ByKey)
         {
             if (!v2ByKey.ContainsKey(pair.Key))
             {
                 DetachJsonNode(pair.Value);
-                remove.Add(pair.Value);
+                remove.Add(pair.Key);
+            }
+        }
+
+        foreach (var pair in v2ByKey)
+        {
+            if (!v1ByKey.TryGetValue(pair.Key, out var previousValue) || !JsonNode.DeepEquals(previousValue, pair.Value))
+            {
+                DetachJsonNode(pair.Value);
+                add.Add(pair.Value);
             }
         }
 
@@ -278,11 +251,6 @@ internal static class V4Diff
         if (remove.Count > 0)
         {
             result["remove"] = remove;
-        }
-
-        if (@override.Count > 0)
-        {
-            result["override"] = @override;
         }
 
         if (result.Count == 0)

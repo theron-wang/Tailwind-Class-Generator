@@ -256,6 +256,10 @@ internal class V4
                                     v.DirectVariants ??= [];
                                     v.DirectVariants.Add(newStem);
                                 }
+
+                                sv.Variants.Remove("current");
+                                sv.Variants.Remove("inherit");
+                                sv.Variants.Remove("transparent");
                             }
 
                             if (sv.Variants.Remove("px"))
@@ -268,6 +272,8 @@ internal class V4
                                     v.DirectVariants ??= [];
                                     v.DirectVariants.Add(newStem);
                                 }
+
+                                sv.Variants.RemoveAll(v => double.TryParse(v, out _));
                             }
 
                             if (sv.Variants.Any(v => v.EndsWith('%')))
@@ -291,6 +297,8 @@ internal class V4
                             if (sv.Variants.Any(v => v.Contains('/')))
                             {
                                 sv.Variants.Remove("2/7");
+
+                                // Fractions are auto-generated in Tailwind CSS for VS
                                 sv.Variants.RemoveAll(sv =>
                                 {
                                     if (!sv.Contains('/'))
@@ -356,11 +364,18 @@ internal class V4
                     v.DirectVariants.Add("{s}");
                     v.UseSpacing = true;
                     v.UseNumbers = null;
+
+                    v.DirectVariants.RemoveAll(dv => double.TryParse(dv, out _));
                 }
 
                 if (v.DirectVariants.Remove("black"))
                 {
                     v.DirectVariants.Add("{c}");
+
+                    v.DirectVariants.Remove("current");
+                    v.DirectVariants.Remove("inherit");
+                    v.DirectVariants.Remove("transparent");
+
                     v.UseColors = true;
                 }
 
@@ -381,6 +396,7 @@ internal class V4
                 {
                     v.DirectVariants.Remove("2/7");
 
+                    // Fractions are auto-generated in Tailwind CSS for VS
                     v.DirectVariants.RemoveAll(sv =>
                     {
                         if (!sv.Contains('/'))
@@ -431,21 +447,18 @@ internal class V4
                 v.Stem = $"{v.Stem[..^6]}-{{c}}";
             }
 
-            if (v.UseColors != true && v.UseSpacing != true && v.UseFractions != true && v.UsePercent != true)
+            if ((v.DirectVariants is null || v.DirectVariants.Count == 0) && v.Subvariants is not null && v.Subvariants.Count == 1)
             {
-                if ((v.DirectVariants is null || v.DirectVariants.Count == 0) && v.Subvariants is not null && v.Subvariants.Count == 1)
-                {
-                    var sub = v.Subvariants[0];
-                    v.Stem += $"-{sub.Stem}";
-                    v.DirectVariants = sub.Variants;
+                var sub = v.Subvariants[0];
+                v.Stem += $"-{sub.Stem}";
+                v.DirectVariants = sub.Variants;
 
-                    v.Subvariants = null;
-                }
-                if ((v.Subvariants is null || v.Subvariants.Count == 0) && v.DirectVariants is not null && v.DirectVariants.Count == 1)
-                {
-                    v.Stem += $"-{v.DirectVariants[0]}";
-                    v.DirectVariants = null;
-                }
+                v.Subvariants = null;
+            }
+            if ((v.Subvariants is null || v.Subvariants.Count == 0) && v.DirectVariants is not null && v.DirectVariants.Count == 1)
+            {
+                v.Stem += $"-{v.DirectVariants[0]}";
+                v.DirectVariants = null;
             }
 
             if (v.Subvariants is not null)
